@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { inquiryAPI, quotationAPI } from '../../services/api';
 import QuotationPreparationModal from '../../components/QuotationPreparationModal';
@@ -8,6 +8,7 @@ import axios from 'axios';
 
 const InquiryDetail = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [inquiry, setInquiry] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -16,6 +17,7 @@ const InquiryDetail = () => {
   const [editingParts, setEditingParts] = useState([]);
   const [saving, setSaving] = useState(false);
   const [materialData, setMaterialData] = useState([]);
+  const [acceptingQuote, setAcceptingQuote] = useState(false);
 
   // Get base URL for material data
   const getBaseURL = () => {
@@ -471,6 +473,44 @@ const InquiryDetail = () => {
     setEditingParts(updatedParts);
   };
 
+  // Handle Accept Quote button click
+  const handleAcceptQuote = async () => {
+    if (!inquiry || !inquiry.inquiryId) {
+      toast.error('Inquiry ID not found');
+      return;
+    }
+
+    setAcceptingQuote(true);
+    try {
+      // First, get the quotation for this inquiry
+      const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('token');
+      
+      const response = await axios.get(`${apiBaseUrl}/quotation/${inquiry.inquiryId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.data.success && response.data.quotation) {
+        const quotationId = response.data.quotation._id;
+        // Navigate to payment page
+        navigate(`/quotation/${quotationId}/payment`);
+      } else {
+        toast.error('Quotation not found for this inquiry');
+      }
+    } catch (error) {
+      console.error('Error fetching quotation:', error);
+      if (error.response?.status === 404) {
+        toast.error('Quotation not found. Please contact support.');
+      } else {
+        toast.error('Failed to fetch quotation. Please try again.');
+      }
+    } finally {
+      setAcceptingQuote(false);
+    }
+  };
+
   const handleFileDownload = async (file) => {
     try {
       // Get the auth token
@@ -717,6 +757,35 @@ const InquiryDetail = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                     Edit Inquiry
+                  </button>
+                )}
+
+                {/* Accept Quote Button - Show for customers when inquiry is quoted */}
+                {user?.role === 'customer' && 
+                 inquiry?.status === 'quoted' && 
+                 !isEditing && (
+                  <button 
+                    onClick={handleAcceptQuote}
+                    disabled={acceptingQuote}
+                    className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Accept quote and proceed to payment"
+                  >
+                    {acceptingQuote ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 100 16v-4l-3 3 3 3v-4a8 8 0 01-8-8z"></path>
+                        </svg>
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Accept Quote
+                      </>
+                    )}
                   </button>
                 )}
 

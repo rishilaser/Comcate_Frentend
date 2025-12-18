@@ -219,21 +219,21 @@ const OrderManagement = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800 border border-yellow-200';
+        return 'bg-amber-50 text-amber-700 border border-amber-200';
       case 'confirmed':
-        return 'bg-blue-100 text-blue-800 border border-blue-200';
+        return 'bg-blue-50 text-blue-700 border border-blue-200';
       case 'in_production':
-        return 'bg-purple-100 text-purple-800 border border-purple-200';
+        return 'bg-indigo-50 text-indigo-700 border border-indigo-200';
       case 'ready_for_dispatch':
-        return 'bg-orange-100 text-orange-800 border border-orange-200';
+        return 'bg-orange-50 text-orange-700 border border-orange-200';
       case 'dispatched':
-        return 'bg-indigo-100 text-indigo-800 border border-indigo-200';
+        return 'bg-cyan-50 text-cyan-700 border border-cyan-200';
       case 'delivered':
-        return 'bg-green-100 text-green-800 border border-green-200';
+        return 'bg-green-50 text-green-700 border border-green-200';
       case 'cancelled':
-        return 'bg-red-100 text-red-800 border border-red-200';
+        return 'bg-red-50 text-red-700 border border-red-200';
       default:
-        return 'bg-gray-100 text-gray-800 border border-gray-200';
+        return 'bg-gray-50 text-gray-700 border border-gray-200';
     }
   };
 
@@ -241,48 +241,48 @@ const OrderManagement = () => {
     switch (status) {
       case 'all':
         return {
-          active: 'bg-gray-800 text-white',
-          inactive: 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          active: 'bg-gray-700 text-white',
+          inactive: 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
         };
       case 'pending':
         return {
-          active: 'bg-yellow-500 text-white',
-          inactive: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+          active: 'bg-amber-500 text-white',
+          inactive: 'bg-white text-amber-700 border border-amber-300 hover:bg-amber-50'
         };
       case 'confirmed':
         return {
-          active: 'bg-blue-500 text-white',
-          inactive: 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+          active: 'bg-blue-600 text-white',
+          inactive: 'bg-white text-blue-700 border border-blue-300 hover:bg-blue-50'
         };
       case 'in_production':
         return {
-          active: 'bg-purple-500 text-white',
-          inactive: 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+          active: 'bg-indigo-600 text-white',
+          inactive: 'bg-white text-indigo-700 border border-indigo-300 hover:bg-indigo-50'
         };
       case 'ready_for_dispatch':
         return {
           active: 'bg-orange-500 text-white',
-          inactive: 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+          inactive: 'bg-white text-orange-700 border border-orange-300 hover:bg-orange-50'
         };
       case 'dispatched':
         return {
-          active: 'bg-indigo-500 text-white',
-          inactive: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+          active: 'bg-cyan-600 text-white',
+          inactive: 'bg-white text-cyan-700 border border-cyan-300 hover:bg-cyan-50'
         };
       case 'delivered':
         return {
-          active: 'bg-green-500 text-white',
-          inactive: 'bg-green-100 text-green-700 hover:bg-green-200'
+          active: 'bg-green-600 text-white',
+          inactive: 'bg-white text-green-700 border border-green-300 hover:bg-green-50'
         };
       case 'cancelled':
         return {
-          active: 'bg-red-500 text-white',
-          inactive: 'bg-red-100 text-red-700 hover:bg-red-200'
+          active: 'bg-red-600 text-white',
+          inactive: 'bg-white text-red-700 border border-red-300 hover:bg-red-50'
         };
       default:
         return {
-          active: 'bg-gray-500 text-white',
-          inactive: 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          active: 'bg-gray-600 text-white',
+          inactive: 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
         };
     }
   };
@@ -310,11 +310,9 @@ const OrderManagement = () => {
     <>
       <div className="w-full">
         {/* Header */}
-        <div className="mb-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Order Management</h1>
-            <p className="mt-1 text-gray-600 text-sm">Manage and track all customer orders.</p>
-          </div>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Order Management</h1>
+          <p className="text-gray-600">Manage and track all customer orders</p>
         </div>
 
         {/* Order Workflow Guide */}
@@ -480,108 +478,108 @@ const OrderManagement = () => {
         </div> */}
 
         <div className="mt-6">
-          <div className="flex flex-wrap gap-7">
+          <div className="flex flex-wrap gap-3">
             <button
               onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2 ${
+              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 flex items-center space-x-2 ${
                 filter === 'all'
                   ? getFilterButtonColor('all').active
                   : getFilterButtonColor('all').inactive
               }`}
             >
               <span>All Orders</span>
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                filter === 'all' ? 'bg-white bg-opacity-20' : 'bg-gray-200'
+              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                filter === 'all' ? 'bg-white/30 text-white' : 'bg-gray-100 text-gray-600'
               }`}>
                 {orders.length}
               </span>
             </button>
             <button
               onClick={() => setFilter('pending')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2 ${
+              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 flex items-center space-x-2 ${
                 filter === 'pending'
                   ? getFilterButtonColor('pending').active
                   : getFilterButtonColor('pending').inactive
               }`}
             >
               <span>Pending</span>
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                filter === 'pending' ? 'bg-white bg-opacity-20' : 'bg-yellow-200'
+              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                filter === 'pending' ? 'bg-white/30 text-white' : 'bg-amber-100 text-amber-600'
               }`}>
                 {getStatusCount('pending')}
               </span>
             </button>
             <button
               onClick={() => setFilter('confirmed')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2 ${
+              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 flex items-center space-x-2 ${
                 filter === 'confirmed'
                   ? getFilterButtonColor('confirmed').active
                   : getFilterButtonColor('confirmed').inactive
               }`}
             >
               <span>Confirmed</span>
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                filter === 'confirmed' ? 'bg-white bg-opacity-20' : 'bg-blue-200'
+              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                filter === 'confirmed' ? 'bg-white/30 text-white' : 'bg-blue-100 text-blue-600'
               }`}>
                 {getStatusCount('confirmed')}
               </span>
             </button>
             <button
               onClick={() => setFilter('in_production')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2 ${
+              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 flex items-center space-x-2 ${
                 filter === 'in_production'
                   ? getFilterButtonColor('in_production').active
                   : getFilterButtonColor('in_production').inactive
               }`}
             >
               <span>In Production</span>
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                filter === 'in_production' ? 'bg-white bg-opacity-20' : 'bg-purple-200'
+              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                filter === 'in_production' ? 'bg-white/30 text-white' : 'bg-indigo-100 text-indigo-600'
               }`}>
                 {getStatusCount('in_production')}
               </span>
             </button>
             <button
               onClick={() => setFilter('ready_for_dispatch')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2 ${
+              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 flex items-center space-x-2 ${
                 filter === 'ready_for_dispatch'
                   ? getFilterButtonColor('ready_for_dispatch').active
                   : getFilterButtonColor('ready_for_dispatch').inactive
               }`}
             >
               <span>Ready for Dispatch</span>
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                filter === 'ready_for_dispatch' ? 'bg-white bg-opacity-20' : 'bg-orange-200'
+              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                filter === 'ready_for_dispatch' ? 'bg-white/30 text-white' : 'bg-orange-100 text-orange-600'
               }`}>
                 {getStatusCount('ready_for_dispatch')}
               </span>
             </button>
             <button
               onClick={() => setFilter('dispatched')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2 ${
+              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 flex items-center space-x-2 ${
                 filter === 'dispatched'
                   ? getFilterButtonColor('dispatched').active
                   : getFilterButtonColor('dispatched').inactive
               }`}
             >
               <span>Dispatched</span>
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                filter === 'dispatched' ? 'bg-white bg-opacity-20' : 'bg-indigo-200'
+              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                filter === 'dispatched' ? 'bg-white/30 text-white' : 'bg-cyan-100 text-cyan-600'
               }`}>
                 {getStatusCount('dispatched')}
               </span>
             </button>
             <button
               onClick={() => setFilter('delivered')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2 ${
+              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 flex items-center space-x-2 ${
                 filter === 'delivered'
                   ? getFilterButtonColor('delivered').active
                   : getFilterButtonColor('delivered').inactive
               }`}
             >
               <span>Delivered</span>
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                filter === 'delivered' ? 'bg-white bg-opacity-20' : 'bg-green-200'
+              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                filter === 'delivered' ? 'bg-white/30 text-white' : 'bg-green-100 text-green-600'
               }`}>
                 {getStatusCount('delivered')}
               </span>
@@ -589,29 +587,29 @@ const OrderManagement = () => {
           </div>
         </div>
 
-        <div className="mt-8">
-          <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="mt-6">
+          <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
             <div className="order-table-horizontal-scroll overflow-x-auto">
-              <div className="max-h-96 overflow-y-auto table-scrollbar">
+              <div className="max-h-[500px] overflow-y-auto">
                 <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
+                    <thead className="bg-gray-100 sticky top-0 z-10">
                       <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                           Order
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                           Customer
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                           Status
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                           Amount
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                           Order Date
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                           Expected Delivery
                         </th>
                         <th scope="col" className="relative px-6 py-3">
@@ -619,22 +617,22 @@ const OrderManagement = () => {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white divide-y divide-gray-100">
                     {filteredOrders.map((order) => (
-                      <tr key={order.id}>
+                      <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-semibold text-gray-900">
                             {order.title}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-xs text-gray-500 mt-0.5">
                             {order.orderNumber}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                           {order.customerName}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${getStatusColor(order.status)}`}>
                             {order.status === 'pending' && (
                               <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
@@ -673,87 +671,89 @@ const OrderManagement = () => {
                             {order.status.charAt(0).toUpperCase() + order.status.slice(1).replace('_', ' ')}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                           ₹{order.amount?.toFixed(2) || '0.00'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                           {new Date(order.createdAt).toLocaleDateString()}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {order.expectedDelivery === 'TBD' ? 'TBD' : new Date(order.expectedDelivery).toLocaleDateString()}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          {order.expectedDelivery === 'TBD' ? <span className="text-gray-400">TBD</span> : new Date(order.expectedDelivery).toLocaleDateString()}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                          <Link
-                            to={`/order/${order.id}`}
-                            className="text-blue-600 hover:text-blue-900"
-                            onClick={() => console.log('View button clicked for order:', order.id, 'Full order:', order)}
-                          >
-                            View
-                          </Link>
-                          {order.status === 'pending' && (
-                            <>
-                              <button
-                                onClick={() => handleConfirmOrder(order)}
-                                className="text-blue-600 hover:text-blue-900"
-                              >
-                                Confirm
-                              </button>
-                              <button
-                                onClick={() => handleSetDeliveryTime(order)}
-                                className="text-green-600 hover:text-green-900"
-                              >
-                                Set Delivery
-                              </button>
-                            </>
-                          )}
-                          {order.status === 'confirmed' && (
-                            <>
-                              <button
-                                onClick={() => handleStartProduction(order)}
-                                className="text-purple-600 hover:text-purple-900"
-                              >
-                                Start Production
-                              </button>
-                              <button
-                                onClick={() => handleSetDeliveryTime(order)}
-                                className="text-green-600 hover:text-green-900"
-                              >
-                                Set Delivery
-                              </button>
-                            </>
-                          )}
-                          {order.status === 'in_production' && (
-                            <>
-                              <button
-                                onClick={() => handleMarkReadyForDispatch(order)}
-                                className="text-orange-600 hover:text-orange-900"
-                              >
-                                Ready for Dispatch
-                              </button>
-                              <button
-                                onClick={() => handleSetDeliveryTime(order)}
-                                className="text-green-600 hover:text-green-900"
-                              >
-                                Update Delivery
-                              </button>
-                            </>
-                          )}
-                          {order.status === 'ready_for_dispatch' && (
-                            <button
-                              onClick={() => handleDispatchOrder(order)}
-                              className="text-purple-600 hover:text-purple-900"
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex items-center justify-end space-x-2">
+                            <Link
+                              to={`/order/${order.id}`}
+                              className="px-3 py-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              Dispatch
-                            </button>
-                          )}
-                          {order.status === 'dispatched' && (
-                            <button
-                              onClick={() => handleMarkDelivered(order)}
-                              className="text-green-600 hover:text-green-900"
-                            >
-                              Mark Delivered
-                            </button>
-                          )}
+                              View
+                            </Link>
+                            {order.status === 'pending' && (
+                              <>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleConfirmOrder(order); }}
+                                  className="px-3 py-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleSetDeliveryTime(order); }}
+                                  className="px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
+                                >
+                                  Set Delivery
+                                </button>
+                              </>
+                            )}
+                            {order.status === 'confirmed' && (
+                              <>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleStartProduction(order); }}
+                                  className="px-3 py-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-md transition-colors"
+                                >
+                                  Start Production
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleSetDeliveryTime(order); }}
+                                  className="px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
+                                >
+                                  Set Delivery
+                                </button>
+                              </>
+                            )}
+                            {order.status === 'in_production' && (
+                              <>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleMarkReadyForDispatch(order); }}
+                                  className="px-3 py-1.5 text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-md transition-colors"
+                                >
+                                  Ready
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleSetDeliveryTime(order); }}
+                                  className="px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
+                                >
+                                  Update
+                                </button>
+                              </>
+                            )}
+                            {order.status === 'ready_for_dispatch' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDispatchOrder(order); }}
+                                className="px-3 py-1.5 text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 rounded-md transition-colors"
+                              >
+                                Dispatch
+                              </button>
+                            )}
+                            {order.status === 'dispatched' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleMarkDelivered(order); }}
+                                className="px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
+                              >
+                                Mark Delivered
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -765,8 +765,12 @@ const OrderManagement = () => {
         </div>
 
         {filteredOrders.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-gray-500 text-lg mb-4">No orders found</div>
+          <div className="text-center py-16 bg-white border border-gray-200 rounded-lg">
+            <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No orders found</h3>
+            <p className="text-sm text-gray-500">Orders will appear here once customers place them.</p>
           </div>
         )}
       </div>

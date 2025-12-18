@@ -656,17 +656,44 @@ const BackOfficeDashboard = () => {
                               )}
                               {quotation.quotationPdf && (
                                 <button
-                                  onClick={() => {
-                                    console.log('Opening quotation PDF:', quotation.quotationPdf);
-                                    const pdfUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/uploads/quotations/${quotation.quotationPdf}`;
-                                    console.log('PDF URL:', pdfUrl);
-                                    window.open(pdfUrl, '_blank');
+                                  onClick={async () => {
+                                    try {
+                                      const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+                                      const token = localStorage.getItem('token');
+                                      const apiPdfUrl = `${apiBaseUrl}/quotation/${quotation._id}/pdf?download=true`;
+                                      
+                                      const response = await fetch(apiPdfUrl, {
+                                        headers: {
+                                          'Authorization': `Bearer ${token}`
+                                        }
+                                      });
+                                      
+                                      if (response.ok) {
+                                        const blob = await response.blob();
+                                        const url = window.URL.createObjectURL(blob);
+                                        const link = document.createElement('a');
+                                        link.href = url;
+                                        link.download = quotation.quotationPdf || `quotation-${quotation.quotationNumber || quotation._id}.pdf`;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                        window.URL.revokeObjectURL(url);
+                                        toast.success('PDF downloaded successfully');
+                                      } else {
+                                        const errorData = await response.json().catch(() => ({}));
+                                        console.error('PDF download error:', errorData);
+                                        toast.error(errorData.message || 'Failed to download PDF');
+                                      }
+                                    } catch (error) {
+                                      console.error('Error downloading PDF:', error);
+                                      toast.error('Failed to download PDF');
+                                    }
                                   }}
                                   className="text-white bg-red-600 hover:bg-red-700 px-3 py-1 rounded-md text-sm font-medium inline-flex items-center"
-                                  title="View Quote PDF"
+                                  title="Download Quote PDF"
                                 >
                                   <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                   </svg>
                                   Quote PDF
                                 </button>

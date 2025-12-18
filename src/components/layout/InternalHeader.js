@@ -86,7 +86,7 @@ const InternalHeader = () => {
     : userNavigation;
 
   return (
-    <header className="bg-white shadow-sm border-b fixed top-0 left-0 right-0 z-50" style={{ height: '80px' }}>
+    <header className="bg-gray-100 shadow-sm border-b fixed top-0 left-0 right-0 z-50" style={{ height: '90px' }}>
       <div className="w-full h-full">
         {/* Top Bar - Contact Info & Social - Hidden if empty */}
         {/* <div className="hidden lg:flex items-center justify-between py-3 bg-blue-900 text-white text-sm px-4 sm:px-6 lg:px-8">
@@ -97,17 +97,17 @@ const InternalHeader = () => {
         <div className="flex items-center justify-between h-full px-4 sm:px-6 lg:px-8">
           {/* Logo - Always show on left side */}
           <div className="flex-shrink-0">
-            <Link to="/" className="flex items-center hover:opacity-80 transition-opacity duration-200">
+            <div className="flex items-center hover:opacity-80 transition-opacity duration-200">
               <img 
                 src="https://www.247cutbend.in/assets/img/logo%20(2).png" 
                 alt="247CUTBEND Logo" 
-                className="h-12 w-auto mr-3"
+                className="h-16 w-auto mr-3"
               />
               {/* <div className="flex flex-col">
                 <span className="text-gray-900 font-semibold text-sm">Admin Panel</span>
                 <span className="text-gray-500 text-xs">247 CUTBEND</span>
               </div> */}
-            </Link>
+            </div>
           </div>
  
           {/* Right side items - Notification and User Menu */}
@@ -181,13 +181,13 @@ const InternalHeader = () => {
             <div className="px-3 pt-2 pb-2">
               <div className="flex items-center justify-between">
                 {!isAdminPage && (
-                  <Link to="/" className="flex items-center" onClick={() => setMobileMenuOpen(false)}>
+                  <div className="flex items-center">
                     <img 
                       src="https://www.247cutbend.in/assets/img/logo%20(2).png" 
                       alt="247CUTBEND Logo" 
-                      className="h-10 w-auto mr-2"
+                      className="h-16 w-auto mr-2"
                     />
-                  </Link>
+                  </div>
                 )}
                 {isAdminPage && <div className="flex-1"></div>}
                 <button

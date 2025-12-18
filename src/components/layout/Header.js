@@ -21,7 +21,7 @@ const Header = () => {
   };
 
   return (
-    <header className="bg-white shadow-lg fixed w-full top-0 z-50">
+    <header className="bg-gray-100 shadow-lg fixed w-full top-0 z-50">
       {/* Top Bar */}
       <div className="bg-blue-900 text-white py-3">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -32,18 +32,18 @@ const Header = () => {
       </div>
 
       {/* Main Navigation */}
-      <nav className="bg-white">
+      <nav className="bg-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
+          <div className="flex justify-between items-center h-24">
             {/* Logo */}
             <div className="flex-shrink-0">
-              <Link to="/" className="flex items-center">
+              <div className="flex items-center">
               <img 
                 src="https://www.247cutbend.in/assets/img/logo%20(2).png" 
                 alt="247CUTBEND Logo" 
                 className="h-20 w-auto mr-3"
               />
-              </Link>
+              </div>
             </div>
 
             {/* User Icon and Login Button */}

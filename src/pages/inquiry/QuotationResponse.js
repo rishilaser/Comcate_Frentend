@@ -307,9 +307,31 @@ const QuotationResponse = () => {
                 {/* PDF Actions */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <button
-                    onClick={() => {
-                      const pdfUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/uploads/quotations/${quotation.quotationPdf}`;
-                      window.open(pdfUrl, '_blank');
+                    onClick={async () => {
+                      try {
+                        const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+                        const token = localStorage.getItem('token');
+                        const apiPdfUrl = `${apiBaseUrl}/quotation/${id}/pdf`;
+                        
+                        const response = await fetch(apiPdfUrl, {
+                          headers: {
+                            'Authorization': `Bearer ${token}`
+                          }
+                        });
+                        
+                        if (response.ok) {
+                          const blob = await response.blob();
+                          const url = window.URL.createObjectURL(blob);
+                          window.open(url, '_blank');
+                        } else {
+                          const errorData = await response.json().catch(() => ({}));
+                          console.error('PDF view error:', errorData);
+                          toast.error(errorData.message || 'Failed to view PDF. Please try downloading instead.');
+                        }
+                      } catch (error) {
+                        console.error('Error viewing PDF:', error);
+                        toast.error('Failed to view PDF. Please try downloading instead.');
+                      }
                     }}
                     className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 shadow-lg hover:shadow-xl transition-all"
                   >
@@ -320,16 +342,47 @@ const QuotationResponse = () => {
                     View Quotation PDF
                   </button>
                   
-                  <a
-                    href={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/uploads/quotations/${quotation.quotationPdf}?download=true`}
-                    download
+                  <button
+                    onClick={async () => {
+                      try {
+                        const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+                        const token = localStorage.getItem('token');
+                        const apiPdfUrl = `${apiBaseUrl}/quotation/${id}/pdf?download=true`;
+                        
+                        const response = await fetch(apiPdfUrl, {
+                          headers: {
+                            'Authorization': `Bearer ${token}`
+                          }
+                        });
+                        
+                        if (response.ok) {
+                          const blob = await response.blob();
+                          const url = window.URL.createObjectURL(blob);
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.download = quotation.quotationPdf || `quotation-${quotation.quotationNumber}.pdf`;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                          window.URL.revokeObjectURL(url);
+                          toast.success('PDF downloaded successfully');
+                        } else {
+                          const errorData = await response.json().catch(() => ({}));
+                          console.error('PDF download error:', errorData);
+                          toast.error(errorData.message || 'Failed to download PDF');
+                        }
+                      } catch (error) {
+                        console.error('Error downloading PDF:', error);
+                        toast.error('Failed to download PDF. Please try again.');
+                      }
+                    }}
                     className="inline-flex items-center justify-center px-6 py-3 border-2 border-gray-300 text-base font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 shadow hover:shadow-lg transition-all"
                   >
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                     Download PDF
-                  </a>
+                  </button>
                 </div>
 
                 {/* PDF Info */}
@@ -359,6 +412,65 @@ const QuotationResponse = () => {
               </div>
             )}
           </div>
+
+          {/* Parts/Items Table */}
+          {quotation.items && quotation.items.length > 0 && (
+            <div className="px-6 py-6 border-t border-gray-200">
+              <h4 className="text-lg font-semibold text-gray-900 mb-4">Parts & Pricing Details</h4>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Part Ref</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Thickness</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Price</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remarks</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {quotation.items.map((item, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {item.partRef || item.partName || `Part ${index + 1}`}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {item.material || 'N/A'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {item.thickness ? `${item.thickness}mm` : 'N/A'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {item.quantity || 0}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          ₹{item.unitPrice?.toFixed(2) || '0.00'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">
+                          ₹{item.totalPrice?.toFixed(2) || (item.unitPrice * item.quantity)?.toFixed(2) || '0.00'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {item.remark || item.remarks || '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-gray-50">
+                    <tr>
+                      <td colSpan="5" className="px-4 py-3 text-right text-sm font-semibold text-gray-900">
+                        Total Amount:
+                      </td>
+                      <td colSpan="2" className="px-4 py-3 text-left text-lg font-bold text-blue-600">
+                        ₹{quotation.totalAmount?.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Total Amount Section */}
           <div className="px-6 py-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-t border-gray-200">
