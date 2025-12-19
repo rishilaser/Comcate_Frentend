@@ -289,7 +289,7 @@ const QuotationResponse = () => {
           
           {/* PDF Viewer/Download Section */}
           <div className="px-6 py-8">
-            {quotation.quotationPdf ? (
+            {quotation.quotationPdf && (quotation.quotationPdf.data || quotation.quotationPdf.fileName || typeof quotation.quotationPdf === 'string') ? (
               <div className="space-y-6">
                 {/* PDF Icon and Info */}
                 <div className="flex items-center justify-center">
@@ -360,7 +360,7 @@ const QuotationResponse = () => {
                           const url = window.URL.createObjectURL(blob);
                           const link = document.createElement('a');
                           link.href = url;
-                          link.download = quotation.quotationPdf || `quotation-${quotation.quotationNumber}.pdf`;
+                          link.download = quotation.quotationPdf?.fileName || quotation.quotationPdf || `quotation-${quotation.quotationNumber}.pdf`;
                           document.body.appendChild(link);
                           link.click();
                           document.body.removeChild(link);
