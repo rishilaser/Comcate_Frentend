@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { tokenUtils, storageUtils } from '../utils/authUtils';
 
 // Create axios instance with base configuration
 const api = axios.create({
@@ -13,23 +12,16 @@ const api = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    // Use storageUtils.getToken() which validates the token
-    const token = storageUtils.getToken();
+    const token = localStorage.getItem('token');
     console.log('API Request:', {
       url: config.url,
       method: config.method,
       token: token ? `Present (${token.substring(0, 20)}...)` : 'Missing',
-      isValid: token ? tokenUtils.isValidToken(token) : false
+      fullToken: token
     });
-    
-    if (token && tokenUtils.isValidToken(token)) {
+    if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    } else if (token) {
-      // Token exists but is invalid - clear it
-      console.warn('Invalid token detected in request, clearing...');
-      storageUtils.clearAuthData();
     }
-    
     return config;
   },
   (error) => {
@@ -69,35 +61,10 @@ api.interceptors.response.use(
       console.error('Error setting up request:', error.message);
     }
     
-    // Handle authentication errors
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      const errorMessage = error.response?.data?.message || 'Authentication failed';
-      const errorType = error.response?.data?.error || '';
-      
-      console.log('Authentication error:', {
-        status: error.response?.status,
-        message: errorMessage,
-        errorType: errorType,
-        currentPath: window.location.pathname
-      });
-      
-      // Clear invalid/expired tokens
-      storageUtils.clearAuthData();
-      
-      // Show user-friendly message
-      if (errorMessage.includes('expired') || errorType === 'TokenExpiredError') {
-        console.log('Token expired, redirecting to login');
-      } else if (errorMessage.includes('Invalid token') || errorType === 'JsonWebTokenError') {
-        console.log('Invalid token format, redirecting to login');
-      }
-      
-      // Only redirect if not already on login/signup page
-      if (window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
-        // Use setTimeout to allow error to be logged first
-        setTimeout(() => {
-          window.location.href = '/login?error=session_expired';
-        }, 100);
-      }
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
     }
     return Promise.reject(error);
   }

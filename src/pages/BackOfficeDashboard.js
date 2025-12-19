@@ -654,7 +654,7 @@ const BackOfficeDashboard = () => {
                                   Send
                                 </button>
                               )}
-                              {quotation.quotationPdf && (quotation.quotationPdf.data || quotation.quotationPdf.fileName || typeof quotation.quotationPdf === 'string') && (
+                              {quotation.quotationPdf && (
                                 <button
                                   onClick={async () => {
                                     try {
@@ -673,7 +673,7 @@ const BackOfficeDashboard = () => {
                                         const url = window.URL.createObjectURL(blob);
                                         const link = document.createElement('a');
                                         link.href = url;
-                                        link.download = quotation.quotationPdf?.fileName || quotation.quotationPdf || `quotation-${quotation.quotationNumber || quotation._id}.pdf`;
+                                        link.download = quotation.quotationPdf || `quotation-${quotation.quotationNumber || quotation._id}.pdf`;
                                         document.body.appendChild(link);
                                         link.click();
                                         document.body.removeChild(link);
