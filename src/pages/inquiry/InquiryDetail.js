@@ -340,31 +340,32 @@ const InquiryDetail = () => {
         throw new Error('Please upload a quotation PDF');
       }
 
-      console.log('=== UPLOADING QUOTATION PDF ===');
-      console.log('Files to upload:', files);
-      console.log('First file:', files[0]);
-      console.log('File name:', files[0]?.name);
-      console.log('File type:', files[0]?.type);
-      console.log('File size:', files[0]?.size);
-      console.log('Inquiry ID:', inquiry?.inquiryId || inquiryId);
-      console.log('Inquiry specifications:', inquiry?.specifications);
-      console.log('Specifications length:', inquiry?.specifications?.length);
+      console.log('📄 ===== FRONTEND: QUOTATION PDF UPLOAD START (InquiryDetail) =====');
+      console.log('📁 File Details:');
+      console.log('   - File Name:', files[0]?.name);
+      console.log('   - File Type:', files[0]?.type);
+      console.log('   - File Size:', files[0]?.size, 'bytes');
+      console.log('   - File Size (MB):', (files[0]?.size / (1024 * 1024)).toFixed(2), 'MB');
+      console.log('   - Last Modified:', new Date(files[0]?.lastModified).toLocaleString());
+      console.log('📋 Inquiry Details:');
+      console.log('   - Inquiry ID:', inquiry?.inquiryId || inquiryId);
+      console.log('   - Specifications Count:', inquiry?.specifications?.length || 0);
 
       const formData = new FormData();
-      formData.append('inquiryId', inquiry?.inquiryId || inquiryId);
+      const inquiryIdValue = inquiry?.inquiryId || inquiryId;
+      formData.append('inquiryId', inquiryIdValue);
       formData.append('quotationPdf', files[0]);
       
-      console.log('FormData entries:');
-      for (let pair of formData.entries()) {
-        console.log(pair[0] + ':', pair[1]);
-      }
+      console.log('📤 FormData Contents:');
+      console.log('   - inquiryId:', inquiryIdValue);
+      console.log('   - quotationPdf:', files[0]?.name, `(${files[0]?.size} bytes)`);
       
       // Include parts data
       const parts = inquiry?.specifications || [];
       formData.append('parts', JSON.stringify(parts));
       
-      console.log('Parts being uploaded:', parts);
-      console.log('Parts array length:', parts.length);
+      console.log('   - Parts Count:', parts.length);
+      console.log('   - Parts Data:', parts);
       
       // Calculate total amount
       const totalAmount = parts.reduce((total, part) => {
@@ -372,7 +373,7 @@ const InquiryDetail = () => {
       }, 0) || 0;
       formData.append('totalAmount', totalAmount);
       
-      console.log('Total amount:', totalAmount);
+      console.log('   - Total Amount:', totalAmount);
       
       // Customer info
       const customerInfo = {
@@ -382,13 +383,18 @@ const InquiryDetail = () => {
         phone: inquiry?.customer?.phone || 'N/A'
       };
       formData.append('customerInfo', JSON.stringify(customerInfo));
+      console.log('   - Customer Info:', customerInfo);
 
-      console.log('Uploading quotation PDF with parts data');
+      console.log('🚀 Sending request to backend...');
       
       // Call upload quotation API (FIXED: using quotationAPI instead of inquiryAPI)
       const response = await quotationAPI.uploadQuotation(formData);
       
-      console.log('Upload quotation response:', response.data);
+      console.log('✅ ===== FRONTEND: QUOTATION PDF UPLOAD RESPONSE =====');
+      console.log('📥 Response Status:', response.status);
+      console.log('📥 Response Data:', response.data);
+      console.log('📥 Quotation ID:', response.data?.quotation?._id);
+      console.log('📥 Quotation Number:', response.data?.quotation?.quotationNumber);
       
       if (response.data.success) {
         toast.success('Quotation uploaded and sent successfully!');

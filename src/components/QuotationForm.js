@@ -352,21 +352,50 @@ const QuotationForm = ({ inquiry, inquiries = [], onClose, onSuccess }) => {
       
       // If uploading quotation with PDF, use multipart/form-data
       if (isUploadQuotation && uploadedQuotationFile) {
+        console.log('📄 ===== FRONTEND: QUOTATION PDF UPLOAD START =====');
+        console.log('📁 File Details:');
+        console.log('   - File Name:', uploadedQuotationFile.name);
+        console.log('   - File Type:', uploadedQuotationFile.type);
+        console.log('   - File Size:', uploadedQuotationFile.size, 'bytes');
+        console.log('   - File Size (MB):', (uploadedQuotationFile.size / (1024 * 1024)).toFixed(2), 'MB');
+        console.log('   - Last Modified:', new Date(uploadedQuotationFile.lastModified).toLocaleString());
+        console.log('📋 Inquiry Details:');
+        console.log('   - Inquiry ID:', inquiry._id);
+        console.log('   - Total Amount:', totalAmount);
+        
         const uploadFormData = new FormData(); // Renamed to avoid variable clash
         uploadFormData.append('quotationPdf', uploadedQuotationFile);
         uploadFormData.append('inquiryId', inquiry._id);
         uploadFormData.append('totalAmount', totalAmount);
-        uploadFormData.append('customerInfo', JSON.stringify({
+        
+        const customerInfoObj = {
           name: getCustomerData().firstName + ' ' + getCustomerData().lastName,
           company: getCustomerData().companyName,
           email: getCustomerData().email,
           phone: inquiry.customerData?.phoneNumber || 'N/A'
-        }));
+        };
+        uploadFormData.append('customerInfo', JSON.stringify(customerInfoObj));
         uploadFormData.append('terms', formData.terms); // Use state variable formData
         uploadFormData.append('notes', formData.notes); // Use state variable formData
         uploadFormData.append('validUntil', formData.validUntil); // Use state variable formData
 
+        console.log('📤 FormData Contents:');
+        console.log('   - quotationPdf:', uploadedQuotationFile.name, `(${uploadedQuotationFile.size} bytes)`);
+        console.log('   - inquiryId:', inquiry._id);
+        console.log('   - totalAmount:', totalAmount);
+        console.log('   - customerInfo:', customerInfoObj);
+        console.log('   - terms:', formData.terms);
+        console.log('   - notes:', formData.notes);
+        console.log('   - validUntil:', formData.validUntil);
+        console.log('🚀 Sending request to backend...');
+
         const response = await quotationAPI.uploadQuotation(uploadFormData);
+        
+        console.log('✅ ===== FRONTEND: QUOTATION PDF UPLOAD RESPONSE =====');
+        console.log('📥 Response Status:', response.status);
+        console.log('📥 Response Data:', response.data);
+        console.log('📥 Quotation ID:', response.data?.quotation?._id);
+        console.log('📥 Quotation Number:', response.data?.quotation?.quotationNumber);
         
         if (response.data.success) {
           toast.success('Quotation uploaded successfully!');
