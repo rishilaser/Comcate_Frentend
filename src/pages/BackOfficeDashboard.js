@@ -241,7 +241,7 @@ const BackOfficeDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex relative pt-20">
       {/* Desktop Sidebar - Always visible, starts exactly below header (80px) - no gap */}
-      <div className="hidden lg:block fixed left-0 top-[80px] h-[calc(100vh-80px)] w-64 z-40 shadow-xl">
+      <div className="hidden lg:block fixed left-0 top-[80px] h-[calc(100vh-80px)] w-64 z-40 shadow-xl bg-white border-r border-gray-200">
         <AdminSidebar />
       </div>
 
@@ -254,7 +254,7 @@ const BackOfficeDashboard = () => {
       )}
 
       {/* Mobile Sidebar */}
-      <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed left-0 top-[80px] h-[calc(100vh-80px)] w-64 z-50 transition-transform duration-300 lg:hidden shadow-xl`}>
+      <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed left-0 top-[80px] h-[calc(100vh-80px)] w-64 z-50 transition-transform duration-300 lg:hidden shadow-xl bg-white border-r border-gray-200`}>
         <AdminSidebar onLinkClick={() => setSidebarOpen(false)} />
       </div>
 

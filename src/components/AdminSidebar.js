@@ -81,7 +81,7 @@ const AdminSidebar = ({ onLinkClick, onToggle, isCollapsed = false, onLogoClick 
   };
 
   return (
-    <div className="w-full h-full bg-transparent flex flex-col">
+    <div className="w-full h-full bg-white flex flex-col">
       {/* Logo/Brand Section - Clickable when expanded to collapse */}
       <div 
         className={`${isCollapsed ? 'px-3 py-4' : 'px-6 py-6 cursor-pointer hover:bg-gray-50'} border-b border-gray-200 flex-shrink-0`}

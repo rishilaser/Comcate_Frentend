@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { inquiryAPI } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 const InquiryList = ({ showQuotations = false }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [inquiries, setInquiries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -247,10 +248,10 @@ const InquiryList = ({ showQuotations = false }) => {
             }}
           >
             {filteredInquiries.map((inquiry) => (
-              <Link 
+              <div 
                 key={inquiry.id} 
-                to={`/inquiry/${inquiry._id}`}
-                className="block bg-white rounded-lg shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-blue-300 transition-shadow group"
+                onClick={() => navigate(`/inquiry/${inquiry._id}`)}
+                className="block bg-white rounded-lg shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-blue-300 transition-shadow group cursor-pointer"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start space-x-4">
@@ -392,7 +393,7 @@ const InquiryList = ({ showQuotations = false }) => {
                     </div>
                   </div>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
 
