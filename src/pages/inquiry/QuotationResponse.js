@@ -7,15 +7,18 @@ import toast from 'react-hot-toast';
 const QuotationResponse = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [quotation, setQuotation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [acceptLoading, setAcceptLoading] = useState(false);
   const [rejectLoading, setRejectLoading] = useState(false);
 
   useEffect(() => {
-    fetchQuotation();
-  }, [id]);
+    // Wait for auth to load before fetching quotation
+    if (!authLoading) {
+      fetchQuotation();
+    }
+  }, [id, authLoading, user]);
 
   const fetchQuotation = async () => {
     try {
@@ -36,21 +39,42 @@ const QuotationResponse = () => {
           console.log('Quotation has no items, fetching inquiry parts as fallback...');
           console.log('Inquiry ID:', quotationData.inquiryId);
           
-          // Check user role to use appropriate endpoint
-          const isAdmin = user?.role === 'admin' || user?.role === 'backoffice' || user?.role === 'subadmin';
-          console.log('User role:', user?.role, 'Is admin:', isAdmin);
+          // Check user role - try multiple ways to determine if admin
+          const userRole = user?.role || user?.type;
+          const isAdmin = userRole === 'admin' || userRole === 'backoffice' || userRole === 'subadmin';
+          console.log('User role:', userRole, 'Is admin:', isAdmin);
+          console.log('Full user object:', user);
+          
+          // Try admin endpoint first, then fallback to regular endpoint
+          let inquiryResponse = null;
+          let parts = null;
           
           try {
-            // Use admin endpoint for admin/backoffice/subadmin, regular endpoint for customers
-            const inquiryResponse = isAdmin 
-              ? await inquiryAPI.getInquiryAdmin(quotationData.inquiryId)
-              : await inquiryAPI.getInquiry(quotationData.inquiryId);
+            // First try admin endpoint (works for admin/backoffice/subadmin)
+            try {
+              inquiryResponse = await inquiryAPI.getInquiryAdmin(quotationData.inquiryId);
+              console.log('Admin endpoint response:', inquiryResponse.data);
+              if (inquiryResponse.data.success && inquiryResponse.data.inquiry?.parts) {
+                parts = inquiryResponse.data.inquiry.parts;
+              }
+            } catch (adminError) {
+              console.log('Admin endpoint failed (status:', adminError.response?.status, '), trying regular endpoint...');
+              // If admin endpoint fails, try regular endpoint
+              try {
+                inquiryResponse = await inquiryAPI.getInquiry(quotationData.inquiryId);
+                console.log('Regular endpoint response:', inquiryResponse.data);
+                if (inquiryResponse.data.success && inquiryResponse.data.inquiry?.parts) {
+                  parts = inquiryResponse.data.inquiry.parts;
+                }
+              } catch (regularError) {
+                console.error('Both endpoints failed:', regularError);
+                throw regularError;
+              }
+            }
             
-            console.log('Inquiry response:', inquiryResponse.data);
-            
-            if (inquiryResponse.data.success && inquiryResponse.data.inquiry?.parts) {
-              console.log('Found inquiry parts:', inquiryResponse.data.inquiry.parts);
-              const parts = inquiryResponse.data.inquiry.parts;
+            // Use the parts we found
+            if (parts && parts.length > 0) {
+              console.log('Found inquiry parts:', parts);
               const totalAmount = quotationData.totalAmount || 0;
               const totalQuantity = parts.reduce((sum, part) => sum + (part.quantity || 0), 0);
               
@@ -345,9 +369,17 @@ const QuotationResponse = () => {
                   <button
                     onClick={async () => {
                       try {
+                        console.log('📄 ===== FRONTEND: PDF DOWNLOAD START =====');
+                        console.log('📋 Quotation Details:');
+                        console.log('   - Quotation ID:', quotation?._id || id);
+                        console.log('   - Quotation Number:', quotation?.quotationNumber);
+                        
                         const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
                         const token = localStorage.getItem('token');
-                        const apiPdfUrl = `${apiBaseUrl}/quotation/${id}/pdf?download=true`;
+                        const quotationId = quotation?._id || id;
+                        const apiPdfUrl = `${apiBaseUrl}/quotation/${quotationId}/pdf?download=true`;
+                        
+                        console.log('🌐 Request URL:', apiPdfUrl);
                         
                         const response = await fetch(apiPdfUrl, {
                           headers: {
@@ -355,25 +387,72 @@ const QuotationResponse = () => {
                           }
                         });
                         
+                        console.log('📥 Response Status:', response.status);
+                        console.log('📥 Response Headers:', {
+                          'Content-Type': response.headers.get('Content-Type'),
+                          'Content-Length': response.headers.get('Content-Length')
+                        });
+                        
                         if (response.ok) {
                           const blob = await response.blob();
+                          
+                          console.log('📦 Blob Details:');
+                          console.log('   - Blob Size:', blob.size, 'bytes');
+                          console.log('   - Blob Type:', blob.type);
+                          
+                          // Validate blob
+                          if (blob.size === 0) {
+                            console.error('❌ Blob is empty!');
+                            toast.error('Downloaded PDF is empty. Please try again.');
+                            return;
+                          }
+                          
+                          if (blob.type !== 'application/pdf' && !blob.type.includes('pdf')) {
+                            console.warn('⚠️  Blob type is not PDF:', blob.type);
+                            const text = await blob.text();
+                            console.error('Response text:', text);
+                            try {
+                              const errorData = JSON.parse(text);
+                              toast.error(errorData.message || 'Failed to download PDF');
+                            } catch (e) {
+                              toast.error('Invalid PDF format received');
+                            }
+                            return;
+                          }
+                          
+                          // Validate PDF header
+                          const arrayBuffer = await blob.slice(0, 4).arrayBuffer();
+                          const uint8Array = new Uint8Array(arrayBuffer);
+                          const pdfHeader = String.fromCharCode(...uint8Array);
+                          console.log('📄 PDF Header:', pdfHeader);
+                          
+                          if (pdfHeader !== '%PDF') {
+                            console.error('❌ Invalid PDF header:', pdfHeader);
+                            toast.error('Downloaded file is not a valid PDF. Please try again.');
+                            return;
+                          }
+                          
+                          console.log('✅ PDF is valid, creating download...');
+                          
                           const url = window.URL.createObjectURL(blob);
                           const link = document.createElement('a');
                           link.href = url;
-                          link.download = quotation.quotationPdf || `quotation-${quotation.quotationNumber}.pdf`;
+                          link.download = quotation?.quotationPdf || `quotation-${quotation?.quotationNumber || quotationId}.pdf`;
                           document.body.appendChild(link);
                           link.click();
                           document.body.removeChild(link);
                           window.URL.revokeObjectURL(url);
+                          
+                          console.log('✅ PDF downloaded successfully');
                           toast.success('PDF downloaded successfully');
                         } else {
                           const errorData = await response.json().catch(() => ({}));
-                          console.error('PDF download error:', errorData);
+                          console.error('❌ PDF download error:', errorData);
                           toast.error(errorData.message || 'Failed to download PDF');
                         }
                       } catch (error) {
-                        console.error('Error downloading PDF:', error);
-                        toast.error('Failed to download PDF. Please try again.');
+                        console.error('❌ Error downloading PDF:', error);
+                        toast.error('Failed to download PDF: ' + error.message);
                       }
                     }}
                     className="inline-flex items-center justify-center px-6 py-3 border-2 border-gray-300 text-base font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 shadow hover:shadow-lg transition-all"
