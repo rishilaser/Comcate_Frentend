@@ -666,7 +666,9 @@ const BackOfficeDashboard = () => {
                                       
                                       const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
                                       const token = localStorage.getItem('token');
-                                      const apiPdfUrl = `${apiBaseUrl}/quotation/${quotation._id}/pdf?download=true`;
+                                      // Fix double /api issue - remove trailing /api if present
+                                      const baseUrl = apiBaseUrl.endsWith('/api') ? apiBaseUrl.replace(/\/api$/, '') : apiBaseUrl;
+                                      const apiPdfUrl = `${baseUrl}/api/quotation/${quotation._id}/pdf?download=true`;
                                       
                                       console.log('🌐 Request URL:', apiPdfUrl);
                                       
