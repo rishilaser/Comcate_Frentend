@@ -1,24 +1,9 @@
 import axios from 'axios';
 
-// Helper function to normalize API URL (fix double /api issue)
-const getApiBaseURL = () => {
-  const envUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-  // Remove trailing /api if present to avoid double /api/api/
-  if (envUrl.endsWith('/api')) {
-    return envUrl;
-  } else if (envUrl.endsWith('/api/')) {
-    return envUrl.slice(0, -1); // Remove trailing slash
-  }
-  // If no /api, add it
-  return envUrl.endsWith('/') ? `${envUrl}api` : `${envUrl}/api`;
-};
-
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: getApiBaseURL(),
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
   timeout: 300000, // 5 minutes timeout for file uploads and inquiry creation
-  maxContentLength: 500 * 1024 * 1024, // 500MB max content length
-  maxBodyLength: 500 * 1024 * 1024, // 500MB max body length
   headers: {
     'Content-Type': 'application/json',
   },
@@ -61,16 +46,6 @@ api.interceptors.response.use(
       message: error.response?.data?.message || error.message,
       data: error.response?.data
     });
-    
-    // Handle 413 Content Too Large error specifically
-    if (error.response?.status === 413) {
-      error.response.data = {
-        ...error.response.data,
-        message: error.response.data?.message || 'File too large. Maximum upload size is 100MB per file. Please reduce file size or contact support.',
-        error: 'FILE_TOO_LARGE',
-        suggestion: 'Try compressing your files or splitting them into smaller parts.'
-      };
-    }
     
     // Enhanced error logging
     if (error.response) {
