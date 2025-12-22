@@ -1,8 +1,21 @@
 import axios from 'axios';
 
+// Helper function to normalize API URL (fix double /api issue)
+const getApiBaseURL = () => {
+  const envUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+  // Remove trailing /api if present to avoid double /api/api/
+  if (envUrl.endsWith('/api')) {
+    return envUrl;
+  } else if (envUrl.endsWith('/api/')) {
+    return envUrl.slice(0, -1); // Remove trailing slash
+  }
+  // If no /api, add it
+  return envUrl.endsWith('/') ? `${envUrl}api` : `${envUrl}/api`;
+};
+
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  baseURL: getApiBaseURL(),
   timeout: 300000, // 5 minutes timeout for file uploads and inquiry creation
   maxContentLength: 500 * 1024 * 1024, // 500MB max content length
   maxBodyLength: 500 * 1024 * 1024, // 500MB max body length
