@@ -4,6 +4,8 @@ import axios from 'axios';
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
   timeout: 300000, // 5 minutes timeout for file uploads and inquiry creation
+  maxContentLength: 500 * 1024 * 1024, // 500MB max content length
+  maxBodyLength: 500 * 1024 * 1024, // 500MB max body length
   headers: {
     'Content-Type': 'application/json',
   },
@@ -46,6 +48,16 @@ api.interceptors.response.use(
       message: error.response?.data?.message || error.message,
       data: error.response?.data
     });
+    
+    // Handle 413 Content Too Large error specifically
+    if (error.response?.status === 413) {
+      error.response.data = {
+        ...error.response.data,
+        message: error.response.data?.message || 'File too large. Maximum upload size is 100MB per file. Please reduce file size or contact support.',
+        error: 'FILE_TOO_LARGE',
+        suggestion: 'Try compressing your files or splitting them into smaller parts.'
+      };
+    }
     
     // Enhanced error logging
     if (error.response) {

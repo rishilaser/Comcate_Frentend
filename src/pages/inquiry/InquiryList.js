@@ -105,6 +105,68 @@ const InquiryList = ({ showQuotations = false }) => {
     }
   };
 
+  const handleDownloadQuotationPDF = async (quotationId, quotationNumber) => {
+    try {
+      const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('token');
+      const apiPdfUrl = `${apiBaseUrl}/quotation/${quotationId}/pdf?download=true`;
+      
+      toast.loading('Downloading PDF...', { id: 'pdf-download' });
+      
+      const response = await fetch(apiPdfUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        
+        if (blob.size === 0) {
+          toast.error('Downloaded PDF is empty. Please try again.', { id: 'pdf-download' });
+          return;
+        }
+        
+        if (blob.type !== 'application/pdf' && !blob.type.includes('pdf')) {
+          const text = await blob.text();
+          try {
+            const errorData = JSON.parse(text);
+            toast.error(errorData.message || 'Failed to download PDF', { id: 'pdf-download' });
+          } catch (e) {
+            toast.error('Invalid PDF format received', { id: 'pdf-download' });
+          }
+          return;
+        }
+        
+        const arrayBuffer = await blob.slice(0, 4).arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        const pdfHeader = String.fromCharCode(...uint8Array);
+        
+        if (pdfHeader !== '%PDF') {
+          toast.error('Downloaded file is not a valid PDF. Please try again.', { id: 'pdf-download' });
+          return;
+        }
+        
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `quotation-${quotationNumber || quotationId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        toast.success('PDF downloaded successfully', { id: 'pdf-download' });
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        toast.error(errorData.message || 'Failed to download PDF', { id: 'pdf-download' });
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      toast.error('Failed to download PDF: ' + error.message, { id: 'pdf-download' });
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto ">
@@ -347,6 +409,18 @@ const InquiryList = ({ showQuotations = false }) => {
                             >
                               ✓ Accept Quotation
                             </Link>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadQuotationPDF(inquiry.quotation.id, inquiry.quotation.quotationNumber);
+                              }}
+                              className="inline-flex items-center justify-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-1 focus:ring-red-500"
+                            >
+                              <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              Download PDF
+                            </button>
                             <Link
                               to={`/quotation/${inquiry.quotation.id}`}
                               onClick={(e) => e.stopPropagation()}
@@ -366,6 +440,18 @@ const InquiryList = ({ showQuotations = false }) => {
                             >
                               💳 Make Payment
                             </Link>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadQuotationPDF(inquiry.quotation.id, inquiry.quotation.quotationNumber);
+                              }}
+                              className="inline-flex items-center justify-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-1 focus:ring-red-500"
+                            >
+                              <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              Download PDF
+                            </button>
                             <Link
                               to={`/quotation/${inquiry.quotation.id}`}
                               onClick={(e) => e.stopPropagation()}
@@ -377,8 +463,22 @@ const InquiryList = ({ showQuotations = false }) => {
                         )}
                         
                         {inquiry.quotation.status === 'rejected' && (
-                          <div className="text-sm text-gray-500 font-medium">
-                            Quotation rejected
+                          <div className="flex flex-col space-y-2">
+                            <div className="text-sm text-gray-500 font-medium">
+                              Quotation rejected
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadQuotationPDF(inquiry.quotation.id, inquiry.quotation.quotationNumber);
+                              }}
+                              className="inline-flex items-center justify-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-1 focus:ring-red-500"
+                            >
+                              <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              Download PDF
+                            </button>
                           </div>
                         )}
                       </div>
