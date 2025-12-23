@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { inquiryAPI } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
-const InquiryList = ({ showQuotations = false }) => {
+const InquiryList = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [inquiries, setInquiries] = useState([]);
@@ -15,11 +15,13 @@ const InquiryList = ({ showQuotations = false }) => {
 
   useEffect(() => {
     fetchInquiries();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Refetch inquiries when filters change (but not for search term)
   useEffect(() => {
     fetchInquiries();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, sortBy]);
 
   const fetchInquiries = async () => {
@@ -90,6 +92,7 @@ const InquiryList = ({ showQuotations = false }) => {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const getStatusColor = (status) => {
     switch (status) {
       case 'pending':

@@ -32,6 +32,7 @@ const InquiryDetail = () => {
     if (isEditing) {
       fetchMaterialData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditing]);
 
   const fetchMaterialData = async () => {
@@ -112,6 +113,7 @@ const InquiryDetail = () => {
     if (user) {
       fetchInquiry();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user]);
 
   const fetchInquiry = async () => {
@@ -652,6 +654,7 @@ const InquiryDetail = () => {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const getStatusColor = (status) => {
     switch (status) {
       case 'pending':
@@ -918,6 +921,7 @@ const InquiryDetail = () => {
                       const availableThicknesses = materialData.length > 0
                         ? [...new Set(materialData.map(m => m.thickness))].sort((a, b) => parseFloat(a) - parseFloat(b))
                         : ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0', '4.0', '5.0'];
+                      // eslint-disable-next-line no-unused-vars
                       const availableGrades = materialData.length > 0
                         ? [...new Set(materialData.map(m => m.grade).filter(g => g && g.trim() !== ''))]
                         : [];

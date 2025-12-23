@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { quotationAPI, inquiryAPI, orderAPI } from '../services/api';
-import toast from 'react-hot-toast';
 
 const Dashboard = () => {
   const { user, loading } = useAuth();
@@ -20,7 +19,7 @@ const Dashboard = () => {
       console.log('Redirecting admin user to /admin/dashboard');
       navigate('/admin/dashboard', { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, loading]);
   
   // Initialize state variables first
   const [quotations, setQuotations] = useState([]);
@@ -157,9 +156,10 @@ const Dashboard = () => {
       fetchInquiries();
       fetchOrders();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const [recentActivity, setRecentActivity] = useState([
+  const [recentActivity] = useState([
     {
       id: 1,
       type: 'inquiry',
@@ -186,7 +186,8 @@ const Dashboard = () => {
     }
   ]);
 
-  const [recentOrders, setRecentOrders] = useState([
+  // eslint-disable-next-line no-unused-vars
+  const [recentOrders] = useState([
     {
       id: 1,
       orderNumber: 'KO-2024-001',
@@ -205,6 +206,7 @@ const Dashboard = () => {
     }
   ]);
 
+  // eslint-disable-next-line no-unused-vars
   const workflowSteps = [
     {
       step: 1,

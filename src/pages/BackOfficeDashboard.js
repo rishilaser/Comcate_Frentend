@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import InquiryList from './inquiry/InquiryList';
-import OrderManagement from './order/OrderManagement';
 import BackOfficeMaterialManagement from './BackOfficeMaterialManagement';
 import QuotationForm from '../components/QuotationForm';
 import SubAdminManagement from '../components/SubAdminManagement';
 import AdminSidebar from '../components/AdminSidebar';
-import { inquiryAPI, quotationAPI, orderAPI, adminAPI } from '../services/api';
+import { inquiryAPI, quotationAPI, adminAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import {
@@ -41,6 +39,7 @@ const BackOfficeDashboard = () => {
     if (user) {
       fetchData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Update active tab from URL query parameter
@@ -88,7 +87,7 @@ const BackOfficeDashboard = () => {
           customer: `${inquiry.customer?.firstName || ''} ${inquiry.customer?.lastName || ''}`.trim() || 'N/A',
           company: inquiry.customer?.companyName || 'N/A',
           files: inquiry.files?.length || 0,
-          parts: inquiry.parts?.length || 0,
+          partsCount: inquiry.parts?.length || 0,
           status: inquiry.status,
           date: new Date(inquiry.createdAt).toLocaleDateString('en-US', {
             month: 'numeric',
