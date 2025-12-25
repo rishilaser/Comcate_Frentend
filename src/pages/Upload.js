@@ -15,6 +15,17 @@ const Upload = () => {
         toast.error('Please select a PDF file');
         return;
       }
+      
+      // Validate file size (5MB limit)
+      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+      if (selectedFile.size > maxSize) {
+        toast.error(`File size exceeds 5MB limit. Your file is ${(selectedFile.size / 1024 / 1024).toFixed(2)}MB`);
+        // Reset file input
+        e.target.value = '';
+        setFile(null);
+        return;
+      }
+      
       setFile(selectedFile);
       setPdfUrl(''); // Reset previous URL
     }
@@ -84,9 +95,12 @@ const Upload = () => {
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         <div className="bg-white shadow-lg rounded-lg p-6 md:p-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-6 text-center">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2 text-center">
             Upload PDF to Cloudinary
           </h2>
+          <p className="text-center text-gray-600 mb-6">
+            Maximum file size: <span className="font-semibold">5MB</span>
+          </p>
 
           <div className="space-y-6">
             {/* File Input Section */}
@@ -119,8 +133,13 @@ const Upload = () => {
                   {file ? file.name : 'Click to select PDF file'}
                 </span>
                 <span className="text-sm text-gray-500">
-                  {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : 'PDF files only'}
+                  {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : 'PDF files only (Max 5MB)'}
                 </span>
+                {file && file.size > 5 * 1024 * 1024 && (
+                  <span className="text-sm text-red-600 font-semibold mt-1">
+                    ⚠️ File exceeds 5MB limit!
+                  </span>
+                )}
               </label>
             </div>
 
@@ -144,9 +163,9 @@ const Upload = () => {
             <div className="flex gap-4 justify-center">
               <button
                 onClick={uploadPdf}
-                disabled={!file || uploading}
+                disabled={!file || uploading || (file && file.size > 5 * 1024 * 1024)}
                 className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-                  !file || uploading
+                  !file || uploading || (file && file.size > 5 * 1024 * 1024)
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
                 }`}

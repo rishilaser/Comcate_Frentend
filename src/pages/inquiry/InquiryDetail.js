@@ -145,20 +145,11 @@ const InquiryDetail = () => {
         return;
       }
       
-      // Use admin API if user is admin/backoffice, otherwise use regular API
-      const isAdmin = user?.role === 'admin' || user?.role === 'backoffice' || user?.role === 'subadmin';
-      
-      // Temporary workaround: if user email is admin@gmail.com, treat as admin
-      const isAdminByEmail = user?.email === 'admin@gmail.com';
-      const finalIsAdmin = isAdmin || isAdminByEmail;
-      
+      // Use regular API - it now handles both customer and admin access
+      // The backend route automatically checks permissions
       let response;
       try {
-        if (finalIsAdmin) {
-          response = await inquiryAPI.getInquiryAdmin(id);
-        } else {
-          response = await inquiryAPI.getInquiry(id);
-        }
+        response = await inquiryAPI.getInquiry(id);
       } catch (apiError) {
         // Ignore cancellation errors - they're expected when requests are cancelled
         if (apiError.name === 'CanceledError' || apiError.code === 'ERR_CANCELED') {
@@ -173,17 +164,18 @@ const InquiryDetail = () => {
         
         // Check for specific error types
         if (apiError.response?.status === 401) {
+          // 401 is handled by axios interceptor - will logout automatically
           toast.error('Authentication failed. Please login again.');
-          // Clear auth data and redirect to login
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          window.location.href = '/login';
           return;
         } else if (apiError.response?.status === 403) {
+          // 403 = Access denied, but user is still authenticated
           toast.error('Access denied. You do not have permission to view this inquiry.');
+          // Navigate back instead of logging out
+          navigate('/inquiries');
           return;
         } else if (apiError.response?.status === 404) {
           toast.error('Inquiry not found.');
+          navigate('/inquiries');
           return;
         } else if (apiError.response?.status === 500) {
           toast.error('Server error. Please try again later.');
@@ -327,6 +319,12 @@ const InquiryDetail = () => {
     try {
       if (!files || files.length === 0) {
         throw new Error('Please upload a quotation PDF');
+      }
+
+      // Validate file size (5MB limit)
+      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+      if (files[0].size > maxSize) {
+        throw new Error(`File size exceeds 5MB limit. Your file is ${(files[0].size / 1024 / 1024).toFixed(2)}MB`);
       }
 
       console.log('📄 ===== FRONTEND: QUOTATION PDF UPLOAD START (InquiryDetail) =====');

@@ -127,7 +127,9 @@ const BackOfficeDashboard = () => {
               year: 'numeric'
             }),
             _id: quotation._id,
-            quotationPdf: quotation.quotationPdf // Original field (no test data)
+            quotationNumber: quotation.quotationNumber,
+            quotationPdf: quotation.quotationPdf,
+            quotationPdfCloudinaryUrl: quotation.quotationPdfCloudinaryUrl
           };
         });
         
@@ -219,6 +221,106 @@ const BackOfficeDashboard = () => {
     } catch (error) {
       console.error('Error sending quotation:', error);
       toast.error('Failed to send quotation');
+    }
+  };
+
+  const handleDownloadPDF = async (quotation) => {
+    try {
+      const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('token');
+      
+      // Check if Cloudinary URL exists first (preferred method)
+      if (quotation.quotationPdfCloudinaryUrl) {
+        // Direct download from Cloudinary - add download parameter
+        const cloudinaryUrl = quotation.quotationPdfCloudinaryUrl;
+        // For Cloudinary, we can use the URL directly or add fl_attachment for download
+        const downloadUrl = cloudinaryUrl.includes('?') 
+          ? `${cloudinaryUrl}&fl_attachment`
+          : `${cloudinaryUrl}?fl_attachment`;
+        
+        // Create a temporary link to trigger download
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `quotation_${quotation.quotationNumber || quotation._id}.pdf`;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast.success('PDF download started!');
+        return;
+      }
+      
+      // Check if quotationPdf is a Cloudinary URL (starts with http)
+      if (quotation.quotationPdf && quotation.quotationPdf.startsWith('http')) {
+        const link = document.createElement('a');
+        link.href = quotation.quotationPdf;
+        link.download = `quotation_${quotation.quotationNumber || quotation._id}.pdf`;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast.success('PDF download started!');
+        return;
+      }
+      
+      // Fallback to API endpoint for database-stored PDFs
+      const apiPdfUrl = `${apiBaseUrl}/quotation/${quotation._id}/pdf?download=true`;
+      
+      const response = await fetch(apiPdfUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        
+        if (blob.size === 0) {
+          toast.error('PDF is empty. Please try again.');
+          return;
+        }
+        
+        // Validate PDF header
+        const arrayBuffer = await blob.slice(0, 4).arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        const pdfHeader = String.fromCharCode(...uint8Array);
+        
+        if (pdfHeader !== '%PDF') {
+          const text = await blob.text();
+          try {
+            const errorData = JSON.parse(text);
+            toast.error(errorData.message || 'Failed to download PDF');
+          } catch (e) {
+            toast.error('Invalid PDF format received');
+          }
+          return;
+        }
+        
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `quotation_${quotation.quotationNumber || quotation._id}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        toast.success('PDF downloaded successfully!');
+      } else {
+        const errorText = await response.text();
+        try {
+          const errorData = JSON.parse(errorText);
+          toast.error(errorData.message || 'Failed to download PDF');
+        } catch (e) {
+          toast.error('Failed to download PDF');
+        }
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      toast.error('Failed to download PDF. Please try again.');
     }
   };
 
@@ -663,108 +765,16 @@ const BackOfficeDashboard = () => {
                                   Send
                                 </button>
                               )}
-                              {quotation.quotationPdf && (
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      console.log('📄 ===== FRONTEND: PDF DOWNLOAD START =====');
-                                      console.log('📋 Quotation Details:');
-                                      console.log('   - Quotation ID:', quotation._id);
-                                      console.log('   - Quotation Number:', quotation.quotationNumber);
-                                      console.log('   - PDF Filename:', quotation.quotationPdf);
-                                      
-                                      const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-                                      const token = localStorage.getItem('token');
-                                      const apiPdfUrl = `${apiBaseUrl}/quotation/${quotation._id}/pdf?download=true`;
-                                      
-                                      console.log('🌐 Request URL:', apiPdfUrl);
-                                      
-                                      const response = await fetch(apiPdfUrl, {
-                                        headers: {
-                                          'Authorization': `Bearer ${token}`
-                                        }
-                                      });
-                                      
-                                      console.log('📥 Response Status:', response.status);
-                                      console.log('📥 Response Headers:', {
-                                        'Content-Type': response.headers.get('Content-Type'),
-                                        'Content-Length': response.headers.get('Content-Length'),
-                                        'Content-Disposition': response.headers.get('Content-Disposition')
-                                      });
-                                      
-                                      if (response.ok) {
-                                        const blob = await response.blob();
-                                        
-                                        console.log('📦 Blob Details:');
-                                        console.log('   - Blob Size:', blob.size, 'bytes');
-                                        console.log('   - Blob Size (MB):', (blob.size / (1024 * 1024)).toFixed(2), 'MB');
-                                        console.log('   - Blob Type:', blob.type);
-                                        
-                                        // Validate blob
-                                        if (blob.size === 0) {
-                                          console.error('❌ Blob is empty!');
-                                          toast.error('Downloaded PDF is empty. Please try again.');
-                                          return;
-                                        }
-                                        
-                                        if (blob.type !== 'application/pdf' && !blob.type.includes('pdf')) {
-                                          console.warn('⚠️  Blob type is not PDF:', blob.type);
-                                          // Try to read as text to see if it's an error message
-                                          const text = await blob.text();
-                                          console.error('Response text:', text);
-                                          try {
-                                            const errorData = JSON.parse(text);
-                                            toast.error(errorData.message || 'Failed to download PDF');
-                                          } catch (e) {
-                                            toast.error('Invalid PDF format received');
-                                          }
-                                          return;
-                                        }
-                                        
-                                        // Validate PDF header by reading first bytes
-                                        const arrayBuffer = await blob.slice(0, 4).arrayBuffer();
-                                        const uint8Array = new Uint8Array(arrayBuffer);
-                                        const pdfHeader = String.fromCharCode(...uint8Array);
-                                        console.log('📄 PDF Header:', pdfHeader);
-                                        
-                                        if (pdfHeader !== '%PDF') {
-                                          console.error('❌ Invalid PDF header:', pdfHeader);
-                                          toast.error('Downloaded file is not a valid PDF. Please try again.');
-                                          return;
-                                        }
-                                        
-                                        console.log('✅ PDF is valid, creating download...');
-                                        
-                                        const url = window.URL.createObjectURL(blob);
-                                        const link = document.createElement('a');
-                                        link.href = url;
-                                        link.download = quotation.quotationPdf || `quotation-${quotation.quotationNumber || quotation._id}.pdf`;
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        document.body.removeChild(link);
-                                        window.URL.revokeObjectURL(url);
-                                        
-                                        console.log('✅ PDF downloaded successfully');
-                                        toast.success('PDF downloaded successfully');
-                                      } else {
-                                        const errorData = await response.json().catch(() => ({}));
-                                        console.error('❌ PDF download error:', errorData);
-                                        toast.error(errorData.message || 'Failed to download PDF');
-                                      }
-                                    } catch (error) {
-                                      console.error('❌ Error downloading PDF:', error);
-                                      toast.error('Failed to download PDF: ' + error.message);
-                                    }
-                                  }}
-                                  className="text-white bg-red-600 hover:bg-red-700 px-3 py-1 rounded-md text-sm font-medium inline-flex items-center"
-                                  title="Download Quote PDF"
-                                >
-                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                  </svg>
-                                  Quote PDF
-                                </button>
-                              )}
+                              <button
+                                onClick={() => handleDownloadPDF(quotation)}
+                                className="text-red-600 hover:text-red-900 bg-red-50 px-3 py-1 rounded-md text-sm font-medium flex items-center gap-1"
+                                title="Download PDF"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                PDF
+                              </button>
                             </div>
                           </td>
                       </tr>

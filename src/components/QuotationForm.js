@@ -262,6 +262,14 @@ const QuotationForm = ({ inquiry, inquiries = [], onClose, onSuccess }) => {
         return;
       }
       
+      // Validate file size (5MB limit)
+      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+      if (file.size > maxSize) {
+        toast.error(`File size exceeds 5MB limit. Your file is ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+        event.target.value = ''; // Clear the file input
+        return;
+      }
+      
       setUploadedQuotationFile(file);
       setPdfProcessed(false); // Reset processed flag
       
@@ -588,7 +596,15 @@ const QuotationForm = ({ inquiry, inquiries = [], onClose, onSuccess }) => {
                   <p className="text-base text-gray-800 font-medium mb-2">
                     {uploadedQuotationFile ? uploadedQuotationFile.name : 'Click to upload quotation PDF or drag and drop'}
                   </p>
-                  <p className="text-sm text-gray-600 font-medium">Only PDF files are allowed</p>
+                  <p className="text-sm text-gray-600 font-medium">Only PDF files are allowed (Max 5MB)</p>
+                  {uploadedQuotationFile && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      File size: {(uploadedQuotationFile.size / 1024 / 1024).toFixed(2)} MB
+                      {uploadedQuotationFile.size > 5 * 1024 * 1024 && (
+                        <span className="text-red-600 font-semibold ml-2">⚠️ Exceeds 5MB limit!</span>
+                      )}
+                    </p>
+                  )}
                 </label>
               </div>
               {uploadedQuotationFile && (

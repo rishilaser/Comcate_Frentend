@@ -56,11 +56,11 @@ api.interceptors.request.use(
       const requestKey = `${config.method}:${config.url}`;
       const existingCancelToken = cancelTokenMap.get(requestKey);
       
-      // Only cancel if there's an existing pending request AND it's very recent (< 50ms)
-      // This prevents cancelling legitimate rapid requests while still catching duplicates
+      // Only cancel if there's an existing pending request AND it's very recent (< 100ms)
+      // Increased threshold to prevent cancelling legitimate rapid requests
       if (existingCancelToken && existingCancelToken.timestamp) {
         const timeSinceLastRequest = Date.now() - existingCancelToken.timestamp;
-        if (timeSinceLastRequest < 50) {
+        if (timeSinceLastRequest < 100) {
           try {
             existingCancelToken.cancel('Request cancelled due to new request');
           } catch (e) {
@@ -116,20 +116,21 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
     
-    // Handle authentication errors (401/403)
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    // Handle authentication errors (401 = unauthorized, 403 = forbidden)
+    // Only logout on 401 (token invalid/expired), not on 403 (access denied)
+    if (error.response?.status === 401) {
       const errorMessage = error.response?.data?.message || error.message;
       
       // Only log in development
       if (process.env.NODE_ENV === 'development') {
-        console.error('API Auth Error:', {
+        console.error('API Auth Error (401):', {
           url: error.config?.url,
           status: error.response?.status,
           message: errorMessage
         });
       }
       
-      // Clear token and redirect to login for auth errors
+      // Clear token and redirect to login for auth errors (401 only)
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       
@@ -138,6 +139,24 @@ api.interceptors.response.use(
         window.location.href = '/login';
       }
       
+      return Promise.reject(error);
+    }
+    
+    // Handle 403 (Forbidden) - Access denied, but user is still authenticated
+    // Don't logout, just reject the promise so component can handle it
+    if (error.response?.status === 403) {
+      const errorMessage = error.response?.data?.message || error.message;
+      
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('API Access Denied (403):', {
+          url: error.config?.url,
+          status: error.response?.status,
+          message: errorMessage
+        });
+      }
+      
+      // Don't logout on 403 - just reject so component can show error message
       return Promise.reject(error);
     }
     

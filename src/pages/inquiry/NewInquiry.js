@@ -103,16 +103,46 @@ const NewInquiry = () => {
       
       const validFiles = files.filter(file => {
         const extension = file.name.split('.').pop().toLowerCase();
-        return ['dwg', 'dxf', 'zip', 'pdf', 'xlsx', 'xls'].includes(extension);
+        const isValidType = ['dwg', 'dxf', 'zip', 'pdf', 'xlsx', 'xls'].includes(extension);
+        
+        // Validate PDF file size (5MB limit)
+        if (extension === 'pdf' && file.size > 5 * 1024 * 1024) {
+          toast.error(`PDF file "${file.name}" exceeds 5MB limit. File size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+          return false;
+        }
+        
+        return isValidType;
       });
       
       if (validFiles.length !== files.length) {
-        toast.error('Only DWG, DXF, ZIP, PDF, XLSX, and XLS files are allowed');
+        const invalidCount = files.length - validFiles.length;
+        if (invalidCount > 0) {
+          toast.error(`${invalidCount} file(s) rejected. Only DWG, DXF, ZIP, PDF (max 5MB), XLSX, and XLS files are allowed`);
+        }
       }
       
       if (validFiles.length === 0) {
         toast.error('No valid files dropped');
         return;
+      }
+      
+      // Check total file limit (100 files)
+      const MAX_FILES = 100;
+      const currentFileCount = pdfFiles.length;
+      const newFileCount = validFiles.length;
+      const totalFiles = currentFileCount + newFileCount;
+      
+      if (totalFiles > MAX_FILES) {
+        const allowedFiles = MAX_FILES - currentFileCount;
+        if (allowedFiles <= 0) {
+          toast.error(`Maximum ${MAX_FILES} files allowed. You already have ${currentFileCount} files.`);
+          return;
+        }
+        toast.error(`Maximum ${MAX_FILES} files allowed. You can add ${allowedFiles} more file(s). Currently have ${currentFileCount} files.`);
+        // Only process allowed files - keep first N files
+        const filesToProcess = validFiles.slice(0, allowedFiles);
+        validFiles.length = 0;
+        validFiles.push(...filesToProcess);
       }
       
       // Process ALL files for the table - use admin's material data
@@ -153,16 +183,46 @@ const NewInquiry = () => {
     
     const validFiles = files.filter(file => {
       const extension = file.name.split('.').pop().toLowerCase();
-      return ['dwg', 'dxf', 'zip', 'pdf', 'xlsx', 'xls'].includes(extension);
+      const isValidType = ['dwg', 'dxf', 'zip', 'pdf', 'xlsx', 'xls'].includes(extension);
+      
+      // Validate PDF file size (5MB limit)
+      if (extension === 'pdf' && file.size > 5 * 1024 * 1024) {
+        toast.error(`PDF file "${file.name}" exceeds 5MB limit. File size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+        return false;
+      }
+      
+      return isValidType;
     });
     
     if (validFiles.length !== files.length) {
-      toast.error('Only DWG, DXF, ZIP, PDF, XLSX, and XLS files are allowed');
+      const invalidCount = files.length - validFiles.length;
+      if (invalidCount > 0) {
+        toast.error(`${invalidCount} file(s) rejected. Only DWG, DXF, ZIP, PDF (max 5MB), XLSX, and XLS files are allowed`);
+      }
     }
     
     if (validFiles.length === 0) {
       toast.error('No valid files selected');
       return;
+    }
+    
+    // Check total file limit (100 files)
+    const MAX_FILES = 100;
+    const currentFileCount = pdfFiles.length;
+    const newFileCount = validFiles.length;
+    const totalFiles = currentFileCount + newFileCount;
+    
+    if (totalFiles > MAX_FILES) {
+      const allowedFiles = MAX_FILES - currentFileCount;
+      if (allowedFiles <= 0) {
+        toast.error(`Maximum ${MAX_FILES} files allowed. You already have ${currentFileCount} files.`);
+        return;
+      }
+      toast.error(`Maximum ${MAX_FILES} files allowed. You can add ${allowedFiles} more file(s). Currently have ${currentFileCount} files.`);
+      // Only process allowed files - keep first N files
+      const filesToProcess = validFiles.slice(0, allowedFiles);
+      validFiles.length = 0;
+      validFiles.push(...filesToProcess);
     }
     
     // Process ALL files for the table (not just PDFs) - use admin's material data
@@ -300,6 +360,12 @@ const NewInquiry = () => {
                     <p className="text-xl font-medium text-gray-700 mb-1">
                       Drag files to upload or
                     </p>
+                    <p className="text-sm font-semibold text-gray-700 mb-2">
+                      Maximum file size: <span className="text-green-600">5MB</span> (PDF files only)
+                    </p>
+                    <p className="text-sm font-semibold text-gray-700 mb-3">
+                      Maximum files: <span className="text-green-600">100</span> files per inquiry
+                    </p>
                     <label className="bg-green-600 text-white px-8 py-3 rounded-lg text-lg font-medium hover:bg-green-700 transition-colors duration-200 shadow-lg cursor-pointer">
                     Upload Drawing
                       <input
@@ -311,8 +377,13 @@ const NewInquiry = () => {
                       />
                     </label>
                     <p className="text-sm text-gray-500 mt-4">
-                      Allowed extensions: dwg, dxf, zip, pdf, xlsx, xls
+                      Allowed extensions: dwg, dxf, zip, pdf (max 5MB), xlsx, xls
                     </p>
+                    {pdfFiles.length > 0 && (
+                      <p className="text-sm text-gray-600 mt-2 font-medium">
+                        Files uploaded: <span className={pdfFiles.length >= 100 ? 'text-red-600' : 'text-green-600'}>{pdfFiles.length}/100</span>
+                      </p>
+                    )}
                   </div>
                 </div>
                 

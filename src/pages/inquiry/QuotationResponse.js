@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { quotationAPI, inquiryAPI } from '../../services/api';
+import { axios } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -12,17 +13,22 @@ const QuotationResponse = () => {
   const [loading, setLoading] = useState(true);
   const [acceptLoading, setAcceptLoading] = useState(false);
   const [rejectLoading, setRejectLoading] = useState(false);
+  const fetchingRef = useRef(false); // Prevent duplicate fetches
 
   useEffect(() => {
     // Wait for auth to load before fetching quotation
-    if (!authLoading) {
+    // Only fetch when id changes or when auth finishes loading (not when user object changes)
+    if (!authLoading && id && !fetchingRef.current) {
+      fetchingRef.current = true;
       fetchQuotation();
     }
-  }, [id, authLoading, user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, authLoading]);
 
   const fetchQuotation = async () => {
     try {
       setLoading(true);
+      fetchingRef.current = true;
       const response = await quotationAPI.getQuotation(id);
       
       console.log('=== QUOTATION RESPONSE DEBUG ===');
@@ -39,37 +45,21 @@ const QuotationResponse = () => {
           console.log('Quotation has no items, fetching inquiry parts as fallback...');
           console.log('Inquiry ID:', quotationData.inquiryId);
           
-          // Check user role - try multiple ways to determine if admin
-          const userRole = user?.role || user?.type;
-          const isAdmin = userRole === 'admin' || userRole === 'backoffice' || userRole === 'subadmin';
-          console.log('User role:', userRole, 'Is admin:', isAdmin);
-          console.log('Full user object:', user);
-          
-          // Try admin endpoint first, then fallback to regular endpoint
+          // Use regular inquiry endpoint - it now handles both customer and admin access
           let inquiryResponse = null;
           let parts = null;
           
           try {
-            // First try admin endpoint (works for admin/backoffice/subadmin)
-            try {
-              inquiryResponse = await inquiryAPI.getInquiryAdmin(quotationData.inquiryId);
-              console.log('Admin endpoint response:', inquiryResponse.data);
-              if (inquiryResponse.data.success && inquiryResponse.data.inquiry?.parts) {
-                parts = inquiryResponse.data.inquiry.parts;
-              }
-            } catch (adminError) {
-              console.log('Admin endpoint failed (status:', adminError.response?.status, '), trying regular endpoint...');
-              // If admin endpoint fails, try regular endpoint
-              try {
-                inquiryResponse = await inquiryAPI.getInquiry(quotationData.inquiryId);
-                console.log('Regular endpoint response:', inquiryResponse.data);
-                if (inquiryResponse.data.success && inquiryResponse.data.inquiry?.parts) {
-                  parts = inquiryResponse.data.inquiry.parts;
-                }
-              } catch (regularError) {
-                console.error('Both endpoints failed:', regularError);
-                throw regularError;
-              }
+            // Use regular endpoint - backend automatically handles permissions
+            inquiryResponse = await inquiryAPI.getInquiry(quotationData.inquiryId);
+            console.log('API Response:', {
+              url: inquiryResponse.config?.url,
+              status: inquiryResponse.status,
+              success: inquiryResponse.data.success
+            });
+            
+            if (inquiryResponse.data.success && inquiryResponse.data.inquiry?.parts) {
+              parts = inquiryResponse.data.inquiry.parts;
             }
             
             // Use the parts we found
@@ -99,39 +89,11 @@ const QuotationResponse = () => {
               toast.success('Parts data loaded from inquiry');
             }
           } catch (inquiryError) {
-            console.error('Failed to fetch inquiry parts:', inquiryError);
-            // If admin endpoint failed, try regular endpoint as fallback (for edge cases)
-            if (isAdmin) {
-              try {
-                const inquiryResponseRegular = await inquiryAPI.getInquiry(quotationData.inquiryId);
-                if (inquiryResponseRegular.data.success && inquiryResponseRegular.data.inquiry?.parts) {
-                  console.log('Found inquiry parts (regular endpoint fallback):', inquiryResponseRegular.data.inquiry.parts);
-                  const parts = inquiryResponseRegular.data.inquiry.parts;
-                  const totalAmount = quotationData.totalAmount || 0;
-                  const totalQuantity = parts.reduce((sum, part) => sum + (part.quantity || 0), 0);
-                  
-                  quotationData.items = parts.map(part => {
-                    const quantity = part.quantity || 0;
-                    const itemTotalPrice = totalQuantity > 0 ? (totalAmount * quantity) / totalQuantity : totalAmount / parts.length;
-                    const unitPrice = quantity > 0 ? itemTotalPrice / quantity : itemTotalPrice;
-                    
-                    return {
-                      partRef: part.partRef || part.partName || 'N/A',
-                      material: part.material || 'N/A',
-                      thickness: part.thickness || 'N/A',
-                      quantity: quantity,
-                      unitPrice: unitPrice,
-                      totalPrice: itemTotalPrice,
-                      remark: part.remarks || ''
-                    };
-                  });
-                  toast.success('Parts data loaded from inquiry');
-                }
-              } catch (secondError) {
-                console.error('Failed to fetch inquiry parts (second attempt):', secondError);
-                // Continue without inquiry parts
-              }
+            // Only log error, don't show toast - quotation will still display
+            if (inquiryError.response?.status !== 403 && inquiryError.response?.status !== 404) {
+              console.error('Failed to fetch inquiry parts:', inquiryError);
             }
+            // Continue without inquiry parts - quotation will still display
           }
         }
         
@@ -140,10 +102,30 @@ const QuotationResponse = () => {
         toast.error(response.data.message || 'Failed to fetch quotation');
       }
     } catch (error) {
+      // Ignore cancellation errors - they're expected when requests are cancelled
+      if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED' || axios.isCancel?.(error)) {
+        // Silently return - this is expected behavior when a new request cancels the old one
+        return;
+      }
+      
       console.error('Error fetching quotation:', error);
-      toast.error('Failed to fetch quotation');
+      
+      // Handle specific error cases
+      if (error.response?.status === 403) {
+        toast.error('Access denied. This quotation does not belong to you.');
+        navigate('/inquiries');
+      } else if (error.response?.status === 404) {
+        toast.error('Quotation not found.');
+        navigate('/inquiries');
+      } else if (error.response?.status === 401) {
+        // 401 is handled by axios interceptor - will logout automatically
+        toast.error('Authentication failed. Please login again.');
+      } else {
+        toast.error('Failed to fetch quotation. Please try again.');
+      }
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
 

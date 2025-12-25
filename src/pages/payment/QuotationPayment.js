@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { quotationAPI, orderAPI, paymentAPI } from '../../services/api';
+import { quotationAPI, orderAPI, paymentAPI, axios } from '../../services/api';
 import toast from 'react-hot-toast';
 import CustomPaymentModal from '../../components/CustomPaymentModal';
 
@@ -12,9 +12,14 @@ const QuotationPayment = () => {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('online');
   const [showCustomPayment, setShowCustomPayment] = useState(false);
+  const fetchingRef = useRef(false); // Prevent duplicate fetches
 
   useEffect(() => {
-    fetchQuotation();
+    if (id && !fetchingRef.current) {
+      fetchingRef.current = true;
+      fetchQuotation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchQuotation = async () => {
@@ -28,10 +33,30 @@ const QuotationPayment = () => {
         toast.error(response.data.message || 'Failed to fetch quotation details');
       }
     } catch (error) {
+      // Ignore cancellation errors - they're expected when requests are cancelled
+      if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED' || axios.isCancel?.(error)) {
+        // Silently return - this is expected behavior when a new request cancels the old one
+        return;
+      }
+      
       console.error('Error fetching quotation:', error);
-      toast.error('Failed to fetch quotation details');
+      
+      // Handle specific error cases
+      if (error.response?.status === 403) {
+        toast.error('Access denied. This quotation does not belong to you.');
+        navigate('/inquiries');
+      } else if (error.response?.status === 404) {
+        toast.error('Quotation not found.');
+        navigate('/inquiries');
+      } else if (error.response?.status === 401) {
+        // 401 is handled by axios interceptor - will logout automatically
+        toast.error('Authentication failed. Please login again.');
+      } else {
+        toast.error('Failed to fetch quotation details. Please try again.');
+      }
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
 
