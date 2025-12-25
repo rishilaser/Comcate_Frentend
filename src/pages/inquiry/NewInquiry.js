@@ -125,24 +125,7 @@ const NewInquiry = () => {
         return;
       }
       
-      // Check total file limit (100 files)
-      const MAX_FILES = 100;
-      const currentFileCount = pdfFiles.length;
-      const newFileCount = validFiles.length;
-      const totalFiles = currentFileCount + newFileCount;
-      
-      if (totalFiles > MAX_FILES) {
-        const allowedFiles = MAX_FILES - currentFileCount;
-        if (allowedFiles <= 0) {
-          toast.error(`Maximum ${MAX_FILES} files allowed. You already have ${currentFileCount} files.`);
-          return;
-        }
-        toast.error(`Maximum ${MAX_FILES} files allowed. You can add ${allowedFiles} more file(s). Currently have ${currentFileCount} files.`);
-        // Only process allowed files - keep first N files
-        const filesToProcess = validFiles.slice(0, allowedFiles);
-        validFiles.length = 0;
-        validFiles.push(...filesToProcess);
-      }
+      // No file limit - unlimited files allowed
       
       // Process ALL files for the table - use admin's material data
       if (materialData.length === 0) {
@@ -205,24 +188,7 @@ const NewInquiry = () => {
       return;
     }
     
-    // Check total file limit (100 files)
-    const MAX_FILES = 100;
-    const currentFileCount = pdfFiles.length;
-    const newFileCount = validFiles.length;
-    const totalFiles = currentFileCount + newFileCount;
-    
-    if (totalFiles > MAX_FILES) {
-      const allowedFiles = MAX_FILES - currentFileCount;
-      if (allowedFiles <= 0) {
-        toast.error(`Maximum ${MAX_FILES} files allowed. You already have ${currentFileCount} files.`);
-        return;
-      }
-      toast.error(`Maximum ${MAX_FILES} files allowed. You can add ${allowedFiles} more file(s). Currently have ${currentFileCount} files.`);
-      // Only process allowed files - keep first N files
-      const filesToProcess = validFiles.slice(0, allowedFiles);
-      validFiles.length = 0;
-      validFiles.push(...filesToProcess);
-    }
+    // No file limit - unlimited files allowed
     
     // Process ALL files for the table (not just PDFs) - use admin's material data
     if (materialData.length === 0) {
@@ -282,17 +248,12 @@ const NewInquiry = () => {
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     
-    const MAX_FILES = 100;
-    
     if (pdfFiles.length === 0) {
       toast.error('Please upload at least one file');
       return;
     }
     
-    if (pdfFiles.length > MAX_FILES) {
-      toast.error(`Maximum ${MAX_FILES} files allowed. You have ${pdfFiles.length} files. Please remove ${pdfFiles.length - MAX_FILES} file(s).`);
-      return;
-    }
+    // No file limit - unlimited files allowed
     
     // Validate that all files have remarks and quantity
     const filesWithoutRemarks = pdfFiles.filter(file => !file.remarks || file.remarks.trim() === '');
@@ -370,7 +331,7 @@ const NewInquiry = () => {
                       Maximum file size: <span className="text-green-600">5MB</span> (all file types)
                     </p>
                     <p className="text-sm font-semibold text-gray-700 mb-3">
-                      Maximum files: <span className="text-green-600">100</span> files per inquiry (optional)
+                      Unlimited files allowed
                     </p>
                     <label className="bg-green-600 text-white px-8 py-3 rounded-lg text-lg font-medium hover:bg-green-700 transition-colors duration-200 shadow-lg cursor-pointer">
                     Upload Drawing
@@ -387,7 +348,7 @@ const NewInquiry = () => {
                     </p>
                     {pdfFiles.length > 0 && (
                       <p className="text-sm text-gray-600 mt-2 font-medium">
-                        Files uploaded: <span className={pdfFiles.length >= 100 ? 'text-green-600' : 'text-gray-600'}>{pdfFiles.length}/100</span>
+                        Files uploaded: <span className="text-green-600">{pdfFiles.length}</span>
                       </p>
                     )}
                   </div>
@@ -443,16 +404,11 @@ const NewInquiry = () => {
                   )}
                   <button
                     type="submit"
-                    disabled={loading || pdfFiles.length === 0 || pdfFiles.length > 100}
+                    disabled={loading || pdfFiles.length === 0}
                     className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     {loading ? (uploadProgress > 0 ? `Uploading... ${uploadProgress}%` : 'Submitting...') : 'Submit Inquiry'}
                   </button>
-                  {pdfFiles.length > 100 && (
-                    <p className="text-sm text-red-600 mt-1">
-                      Maximum 100 files allowed. Please remove {pdfFiles.length - 100} file(s).
-                    </p>
-                  )}
                 </div>
               </form>
             </div>

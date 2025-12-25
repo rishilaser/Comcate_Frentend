@@ -45,7 +45,7 @@ const InquiryList = () => {
       
       if (response.data.success) {
         // Transform the data to match the component's expected format
-        const transformedInquiries = response.data.inquiries.map(inquiry => {
+        const transformedInquiries = (response.data.inquiries || []).map(inquiry => {
           const date = new Date(inquiry.createdAt);
           const dateStr = date.toLocaleDateString('en-US', {
             month: 'short',
@@ -60,7 +60,7 @@ const InquiryList = () => {
           
           return {
             id: inquiry.inquiryNumber,
-            shortId: inquiry.inquiryNumber.replace('INQ', '').slice(-4),
+            shortId: inquiry.inquiryNumber ? inquiry.inquiryNumber.replace('INQ', '').slice(-4) : 'N/A',
             status: inquiry.status,
             company: inquiry.customer?.companyName || 'N/A',
             contact: `${inquiry.customer?.firstName || ''} ${inquiry.customer?.lastName || ''}`.trim() || 'N/A',
@@ -71,7 +71,7 @@ const InquiryList = () => {
             _id: inquiry._id, // Keep the MongoDB ID for API calls
             // Add quotation information
             quotation: inquiry.quotation ? {
-              id: inquiry.quotation._id,
+              id: inquiry.quotation._id || inquiry.quotation,
               quotationNumber: inquiry.quotation.quotationNumber,
               status: inquiry.quotation.status,
               totalAmount: inquiry.quotation.totalAmount,
@@ -82,16 +82,39 @@ const InquiryList = () => {
         
         setInquiries(transformedInquiries);
       } else {
-        toast.error(response.data.message || 'Failed to fetch inquiries');
+        // Don't show error if no inquiries found - that's normal
+        if (response.data.message && !response.data.message.includes('No inquiries')) {
+          toast.error(response.data.message || 'Failed to fetch inquiries');
+        }
+        setInquiries([]);
       }
     } catch (error) {
-      // Don't log cancellation errors
-      if (error.name !== 'CanceledError' && process.env.NODE_ENV === 'development') {
+      // Ignore cancellation errors
+      if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
+        return;
+      }
+      
+      // Only log real errors in development
+      if (process.env.NODE_ENV === 'development') {
         console.error('Error fetching inquiries:', error);
       }
-      if (error.name !== 'CanceledError') {
-        toast.error('Failed to fetch inquiries');
+      
+      // Handle specific errors
+      if (error.response?.status === 401) {
+        // 401 is handled by axios interceptor
+        // Don't show error here
+      } else if (error.response?.status === 403) {
+        toast.error('Access denied. You do not have permission to view inquiries.');
+      } else if (error.response?.status === 404) {
+        // No inquiries found is normal, don't show error
+        setInquiries([]);
+      } else if (error.code === 'ERR_NETWORK') {
+        toast.error('Network error. Please check your connection.');
+      } else {
+        // Only show error for actual failures
+        toast.error('Failed to fetch inquiries. Please try again.');
       }
+      setInquiries([]);
     } finally {
       setLoading(false);
     }
