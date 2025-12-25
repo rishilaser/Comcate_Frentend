@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   PencilIcon, 
   TrashIcon, 
@@ -12,28 +12,26 @@ const PDFFileTable = ({ files, onUpdateFile, onDeleteFile, materialData = [] }) 
   const [editingId, setEditingId] = useState(null);
   const [editingValues, setEditingValues] = useState({});
 
-  // Debug: Log material data received
-  console.log('📦 PDFFileTable - Material data received:', materialData);
-  console.log('📊 Material data length:', materialData.length);
-
-  // Extract unique materials from materialData
-  const availableMaterials = materialData.length > 0 
-    ? [...new Set(materialData.map(m => m.material))]
-    : ['Zintec', 'Mild Steel', 'Stainless Steel', 'Aluminum', 'Galvanized Steel'];
+  // Extract unique materials from materialData - memoized to prevent recalculation
+  const availableMaterials = useMemo(() => {
+    return materialData.length > 0 
+      ? [...new Set(materialData.map(m => m.material))]
+      : ['Zintec', 'Mild Steel', 'Stainless Steel', 'Aluminum', 'Galvanized Steel'];
+  }, [materialData]);
   
   // Extract ALL unique thicknesses from database (not filtered by material)
-  const availableThicknesses = materialData.length > 0
-    ? [...new Set(materialData.map(m => m.thickness))].sort((a, b) => parseFloat(a) - parseFloat(b))
-    : ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0', '4.0', '5.0'];
+  const availableThicknesses = useMemo(() => {
+    return materialData.length > 0
+      ? [...new Set(materialData.map(m => m.thickness))].sort((a, b) => parseFloat(a) - parseFloat(b))
+      : ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0', '4.0', '5.0'];
+  }, [materialData]);
   
   // Extract ALL unique grades from database (not filtered by material)
-  const availableGrades = materialData.length > 0
-    ? [...new Set(materialData.map(m => m.grade).filter(g => g && g.trim() !== ''))]
-    : ['A', 'B', 'C', 'D'];
-  
-  console.log('🎯 Available materials for dropdown:', availableMaterials);
-  console.log('📏 Available thicknesses for dropdown:', availableThicknesses);
-  console.log('⭐ Available grades for dropdown:', availableGrades);
+  const availableGrades = useMemo(() => {
+    return materialData.length > 0
+      ? [...new Set(materialData.map(m => m.grade).filter(g => g && g.trim() !== ''))]
+      : ['A', 'B', 'C', 'D'];
+  }, [materialData]);
 
   const handleEdit = (fileId, file) => {
     setEditingId(fileId);

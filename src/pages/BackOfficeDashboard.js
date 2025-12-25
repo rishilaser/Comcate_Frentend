@@ -155,7 +155,17 @@ const BackOfficeDashboard = () => {
         setOrders(transformedOrders);
       } else if (orderResponse.status === 'rejected') {
         const orderError = orderResponse.reason;
-        console.error('Error fetching orders:', orderError);
+        
+        // Ignore cancellation errors - they're expected when requests are cancelled
+        if (orderError.name === 'CanceledError' || orderError.code === 'ERR_CANCELED') {
+          // Silently ignore - this is expected behavior
+          return;
+        }
+        
+        // Only log real errors in development
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error fetching orders:', orderError);
+        }
         
         if (orderError.response?.status === 401) {
           toast.error('Authentication failed. Please login again.');

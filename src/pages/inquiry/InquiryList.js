@@ -85,8 +85,13 @@ const InquiryList = () => {
         toast.error(response.data.message || 'Failed to fetch inquiries');
       }
     } catch (error) {
-      console.error('Error fetching inquiries:', error);
-      toast.error('Failed to fetch inquiries');
+      // Don't log cancellation errors
+      if (error.name !== 'CanceledError' && process.env.NODE_ENV === 'development') {
+        console.error('Error fetching inquiries:', error);
+      }
+      if (error.name !== 'CanceledError') {
+        toast.error('Failed to fetch inquiries');
+      }
     } finally {
       setLoading(false);
     }

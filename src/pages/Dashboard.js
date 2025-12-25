@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { quotationAPI, inquiryAPI, orderAPI } from '../services/api';
@@ -10,13 +10,8 @@ const Dashboard = () => {
   
   // Redirect admin/backoffice users to their respective dashboards
   useEffect(() => {
-    console.log('Dashboard - User data:', user);
-    console.log('Dashboard - User role:', user?.role);
-    console.log('Dashboard - User loading state:', loading);
-    
     // Only redirect if user data is loaded and user is admin/backoffice
     if (user && (user.role === 'admin' || user.role === 'backoffice' || user.role === 'subadmin')) {
-      console.log('Redirecting admin user to /admin/dashboard');
       navigate('/admin/dashboard', { replace: true });
     }
   }, [user, navigate, loading]);
@@ -62,102 +57,94 @@ const Dashboard = () => {
     }
   }, [inquiries, quotations, orders, user]);
 
-  // Fetch quotations for customer
-  const fetchQuotations = async () => {
+  // Use ref to track if data has been fetched to prevent duplicate calls
+  const hasFetchedRef = useRef(false);
+
+  // Fetch quotations for customer - memoized with useCallback
+  const fetchQuotations = useCallback(async () => {
     try {
       setQuotationsLoading(true);
-      console.log('Fetching quotations...');
       const response = await quotationAPI.getQuotations();
-      console.log('Quotations response:', response.data);
       if (response.data.success) {
         setQuotations(response.data.quotations || []);
-        console.log('Quotations set:', response.data.quotations?.length || 0);
-      } else {
-        console.error('Quotations API failed:', response.data.message);
       }
     } catch (error) {
-      console.error('Error fetching quotations:', error);
+      // Don't log cancellation errors
+      if (error.name !== 'CanceledError' && process.env.NODE_ENV === 'development') {
+        console.error('Error fetching quotations:', error);
+      }
     } finally {
       setQuotationsLoading(false);
     }
-  };
+  }, []);
 
-  // Fetch inquiries for customer
-  const fetchInquiries = async () => {
+  // Fetch inquiries for customer - memoized with useCallback
+  const fetchInquiries = useCallback(async () => {
     try {
       setInquiriesLoading(true);
-      console.log('Fetching inquiries...');
       const response = await inquiryAPI.getInquiries();
-      console.log('Inquiries response:', response.data);
       if (response.data.success) {
         setInquiries(response.data.inquiries || []);
-        console.log('Inquiries set:', response.data.inquiries?.length || 0);
-      } else {
-        console.error('Inquiries API failed:', response.data.message);
       }
     } catch (error) {
-      console.error('Error fetching inquiries:', error);
+      // Don't log cancellation errors
+      if (error.name !== 'CanceledError' && process.env.NODE_ENV === 'development') {
+        console.error('Error fetching inquiries:', error);
+      }
     } finally {
       setInquiriesLoading(false);
     }
-  };
+  }, []);
 
-  // Fetch orders for customer
-  const fetchOrders = async () => {
+  // Fetch orders for customer - memoized with useCallback
+  const fetchOrders = useCallback(async () => {
     try {
       setOrdersLoading(true);
-      console.log('Fetching orders...');
       const response = await orderAPI.getOrders();
-      console.log('Orders response:', response.data);
       if (response.data.success) {
         setOrders(response.data.orders || []);
-        console.log('Orders set:', response.data.orders?.length || 0);
-      } else {
-        console.error('Orders API failed:', response.data.message);
       }
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      // Don't log cancellation errors
+      if (error.name !== 'CanceledError' && process.env.NODE_ENV === 'development') {
+        console.error('Error fetching orders:', error);
+      }
     } finally {
       setOrdersLoading(false);
     }
-  };
+  }, []);
 
-  // Fetch data when tabs are active
+  // Fetch data when tabs are active - always fetch fresh data
   useEffect(() => {
-    if (user?.role !== 'admin' && user?.role !== 'backoffice') {
+    if (user?.role !== 'admin' && user?.role !== 'backoffice' && user?.role !== 'subadmin') {
       if (activeTab === 'quotations') {
         fetchQuotations();
       } else if (activeTab === 'inquiries') {
         fetchInquiries();
       } else if (activeTab === 'orders') {
         fetchOrders();
+      } else if (activeTab === 'overview') {
+        // Fetch all data for overview tab
+        fetchQuotations();
+        fetchInquiries();
+        fetchOrders();
       }
     }
-  }, [activeTab, user]);
+  }, [activeTab, user, fetchQuotations, fetchInquiries, fetchOrders]);
 
-  // Fetch all data for overview tab
+  // Initial data fetch on mount
   useEffect(() => {
-    if (user?.role !== 'admin' && user?.role !== 'backoffice' && activeTab === 'overview') {
+    if (user && 
+        user.role !== 'admin' && 
+        user.role !== 'backoffice' && 
+        user.role !== 'subadmin' &&
+        activeTab === 'overview') {
+      // Fetch all data on initial load
       fetchQuotations();
       fetchInquiries();
       fetchOrders();
     }
-  }, [user, activeTab]);
-
-  // Initial data fetch when component mounts
-  useEffect(() => {
-    console.log('Dashboard useEffect - User:', user);
-    console.log('Dashboard useEffect - User role:', user?.role);
-    console.log('Dashboard useEffect - Loading:', loading);
-    
-    if (user && user.role !== 'admin' && user.role !== 'backoffice' && user.role !== 'subadmin') {
-      console.log('Fetching initial dashboard data for customer');
-      fetchQuotations();
-      fetchInquiries();
-      fetchOrders();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user]); // Only depend on user, not on fetch functions
 
   const [recentActivity] = useState([
     {
@@ -483,8 +470,8 @@ const Dashboard = () => {
                   }}>
                     {quotations.length > 0 ? (
                       <div className="space-y-3">
-                        {quotations.slice(0, 3).map((quotation) => (
-                          <div key={quotation._id || quotation.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        {quotations.slice(0, 3).map((quotation, index) => (
+                          <div key={quotation._id || quotation.id || `quotation-${quotation.quotationNumber || index}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                             <div>
                               <h4 className="text-sm font-medium text-gray-900">
                                 Quotation #{quotation.quotationNumber || quotation.id}
@@ -593,8 +580,8 @@ const Dashboard = () => {
                     </div>
                   ) : quotations.length > 0 ? (
                     <div className="space-y-4">
-                      {quotations.map((quotation) => (
-                        <div key={quotation._id || quotation.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                      {quotations.map((quotation, index) => (
+                        <div key={quotation._id || quotation.id || `quotation-${quotation.quotationNumber || index}`} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
                               <h4 className="text-lg font-medium text-gray-900">
@@ -679,7 +666,7 @@ const Dashboard = () => {
                   ) : inquiries.length > 0 ? (
                     <div className="space-y-4">
                       {inquiries.map((inquiry) => (
-                        <div key={inquiry.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div key={inquiry._id || inquiry.id || `inquiry-${inquiry.inquiryNumber || Math.random()}`} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
                               <h4 className="text-lg font-medium text-gray-900">
@@ -759,7 +746,7 @@ const Dashboard = () => {
                   ) : orders.length > 0 ? (
                     <div className="space-y-4">
                       {orders.map((order) => (
-                        <div key={order.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div key={order._id || order.id || `order-${order.orderNumber || Math.random()}`} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
                               <h4 className="text-lg font-medium text-gray-900">

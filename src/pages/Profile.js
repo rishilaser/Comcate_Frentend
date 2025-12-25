@@ -211,21 +211,22 @@ const Profile = () => {
     
     try {
       setSettingsLoading(true);
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/admin/settings`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const response = await adminAPI.getSettings();
       
-      const data = await response.json();
-      
-      if (data.success) {
-        const { backOfficeEmails: emails, backOfficeMobileNumbers: numbers } = data.settings;
-        setBackOfficeEmails(emails.length >= 4 ? emails : [...emails, ...Array(4 - emails.length).fill('')]);
-        setBackOfficeMobileNumbers(numbers.length >= 2 ? numbers : [...numbers, ...Array(2 - numbers.length).fill('')]);
+      if (response.data.success) {
+        const { backOfficeEmails: emails, backOfficeMobileNumbers: numbers } = response.data.settings;
+        setBackOfficeEmails(emails && emails.length >= 4 ? emails : [...(emails || []), ...Array(4 - (emails?.length || 0)).fill('')]);
+        setBackOfficeMobileNumbers(numbers && numbers.length >= 2 ? numbers : [...(numbers || []), ...Array(2 - (numbers?.length || 0)).fill('')]);
       }
     } catch (error) {
-      console.error('Error fetching settings:', error);
+      // Ignore cancellation errors
+      if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
+        return;
+      }
+      // Only log real errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching settings:', error);
+      }
     } finally {
       setSettingsLoading(false);
     }
@@ -411,7 +412,14 @@ const Profile = () => {
         }));
       }
     } catch (error) {
-      console.error('Error fetching nomenclature config:', error);
+      // Ignore cancellation errors - they're expected
+      if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
+        return;
+      }
+      // Only log real errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching nomenclature config:', error);
+      }
       // Use localStorage as fallback
     }
   };

@@ -54,7 +54,14 @@ const OrderManagement = () => {
         toast.error(response.data.message || 'Failed to fetch orders');
       }
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      // Ignore cancellation errors - they're expected
+      if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
+        return;
+      }
+      // Only log real errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching orders:', error);
+      }
       toast.error('Failed to fetch orders');
     } finally {
       setLoading(false);

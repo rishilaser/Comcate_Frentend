@@ -120,12 +120,6 @@ const InquiryDetail = () => {
     try {
       setLoading(true);
       
-      console.log('=== FETCHING INQUIRY ===');
-      console.log('Inquiry ID:', id);
-      console.log('User object:', user);
-      console.log('User role:', user?.role);
-      console.log('User ID:', user?._id);
-      
       // Check if user is loaded
       if (!user) {
         console.log('User not loaded yet, waiting...');
@@ -153,33 +147,29 @@ const InquiryDetail = () => {
       
       // Use admin API if user is admin/backoffice, otherwise use regular API
       const isAdmin = user?.role === 'admin' || user?.role === 'backoffice' || user?.role === 'subadmin';
-      console.log('Is admin:', isAdmin);
-      console.log('User role check:', {
-        role: user?.role,
-        isAdmin: user?.role === 'admin',
-        isBackoffice: user?.role === 'backoffice',
-        isSubadmin: user?.role === 'subadmin'
-      });
       
       // Temporary workaround: if user email is admin@gmail.com, treat as admin
       const isAdminByEmail = user?.email === 'admin@gmail.com';
       const finalIsAdmin = isAdmin || isAdminByEmail;
-      console.log('Final admin check:', { isAdmin, isAdminByEmail, finalIsAdmin });
       
       let response;
       try {
         if (finalIsAdmin) {
-          console.log('Using admin API...');
           response = await inquiryAPI.getInquiryAdmin(id);
         } else {
-          console.log('Using regular API...');
           response = await inquiryAPI.getInquiry(id);
         }
       } catch (apiError) {
-        console.error('API call failed:', apiError);
-        console.error('API error response:', apiError.response?.data);
-        console.error('API error status:', apiError.response?.status);
-        console.error('API error headers:', apiError.response?.headers);
+        // Ignore cancellation errors - they're expected when requests are cancelled
+        if (apiError.name === 'CanceledError' || apiError.code === 'ERR_CANCELED') {
+          // Silently return - this is expected behavior when a new request cancels the old one
+          return;
+        }
+        
+        // Only log real errors (not cancellations)
+        if (process.env.NODE_ENV === 'development' && apiError.response) {
+          console.error('API call failed:', apiError.message);
+        }
         
         // Check for specific error types
         if (apiError.response?.status === 401) {
@@ -207,11 +197,8 @@ const InquiryDetail = () => {
         }
       }
       
-      console.log('API Response:', response);
-      
       if (response.data.success) {
         const inquiryData = response.data.inquiry;
-        console.log('Inquiry data received:', inquiryData);
         
         // Transform the data to match the component's expected format
         setInquiry({
@@ -1194,7 +1181,6 @@ const InquiryDetail = () => {
       </div>
 
       {/* Quotation Preparation Modal */}
-      {console.log('Rendering modal check:', { showQuotationModal, inquiry: inquiry?.id })}
       {showQuotationModal && (
         <QuotationPreparationModal
           isOpen={showQuotationModal}

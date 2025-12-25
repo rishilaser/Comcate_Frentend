@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { inquiryAPI, handleApiError, handleApiSuccess } from '../../services/api';
@@ -28,58 +28,53 @@ const NewInquiry = () => {
   });
   const [pdfFiles, setPdfFiles] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const [materialData, setMaterialData] = useState([]);
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // Fetch material data from admin on component mount
-  useEffect(() => {
-    fetchMaterialData();
-  }, []);
-
-  const fetchMaterialData = async () => {
+  // Define fetchMaterialData before useEffect to avoid hoisting issues
+  const fetchMaterialData = useCallback(async () => {
     try {
-      console.log('🔍 Fetching material data from admin...');
-      console.log('API URL:', `${API_URL}/api/admin/materials`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 Fetching material data from admin...');
+      }
       
       const response = await axios.get(`${API_URL}/api/admin/materials`);
-      console.log('✅ API Response:', response.data);
       
       if (response.data.success && response.data.materialData) {
         const activeMaterials = response.data.materialData.filter(m => m.status === 'Active');
-        console.log('📊 Total materials from DB:', response.data.materialData.length);
-        console.log('✓ Active materials:', activeMaterials.length);
-        console.log('📦 Material data:', activeMaterials);
         
         if (activeMaterials.length > 0) {
           setMaterialData(activeMaterials);
-          // Success - materials loaded (no toast needed)
-          console.log('✅ Materials loaded:', activeMaterials.length);
-          console.log('✅ Available materials:', activeMaterials.map(m => m.material).join(', '));
         } else {
-          console.warn('⚠️ No active materials in database!');
           setMaterialData([]);
           toast.error('⚠️ No materials found! Please ask admin to add materials first.', {
             duration: 5000
           });
         }
       } else {
-        console.warn('⚠️ No material data in response');
         setMaterialData([]);
         toast.error('⚠️ No materials in database! Please contact admin.', {
           duration: 5000
         });
       }
     } catch (error) {
-      console.error('❌ Error fetching material data:', error);
-      console.error('Error details:', error.response?.data);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Error fetching material data:', error);
+      }
       toast.error('❌ Failed to load materials. Please check backend server.', {
         duration: 5000
       });
       setMaterialData([]);
     }
-  };
+  }, [API_URL]);
+
+  // Fetch material data from admin on component mount
+  useEffect(() => {
+    fetchMaterialData();
+  }, [fetchMaterialData]);
 
   const handleChange = (e) => {
     setFormData({
@@ -105,7 +100,6 @@ const NewInquiry = () => {
     
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const files = Array.from(e.dataTransfer.files);
-      console.log('Files dropped:', files);
       
       const validFiles = files.filter(file => {
         const extension = file.name.split('.').pop().toLowerCase();
@@ -129,9 +123,6 @@ const NewInquiry = () => {
       
       const defaultMaterial = materialData[0];
       
-      console.log('🔧 Using default material for dropped files:', defaultMaterial);
-      console.log('📦 Total available materials:', materialData.length);
-      
       const processedFiles = validFiles.map((file, index) => ({
         id: `file_${Date.now()}_${index}`,
         name: file.name,
@@ -148,10 +139,10 @@ const NewInquiry = () => {
       
       setPdfFiles(prev => {
         const newFiles = [...prev, ...processedFiles];
-        console.log('Files dropped:', processedFiles);
-        console.log('Previous files:', prev);
-        console.log('New total files:', newFiles.length);
-        toast.success(`${validFiles.length} file(s) uploaded successfully`);
+        // Move toast outside setState to avoid render phase update
+        setTimeout(() => {
+          toast.success(`${validFiles.length} file(s) uploaded successfully`);
+        }, 0);
         return newFiles;
       });
     }
@@ -159,7 +150,6 @@ const NewInquiry = () => {
 
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
-    console.log('Files selected:', files);
     
     const validFiles = files.filter(file => {
       const extension = file.name.split('.').pop().toLowerCase();
@@ -183,9 +173,6 @@ const NewInquiry = () => {
     
     const defaultMaterial = materialData[0];
     
-    console.log('🔧 Using default material for files:', defaultMaterial);
-    console.log('📦 Total available materials:', materialData.length);
-    
     const processedFiles = validFiles.map((file, index) => ({
       id: `file_${Date.now()}_${index}`,
       name: file.name,
@@ -202,10 +189,10 @@ const NewInquiry = () => {
     
     setPdfFiles(prev => {
       const newFiles = [...prev, ...processedFiles];
-      console.log('Files uploaded:', processedFiles);
-      console.log('Previous files:', prev);
-      console.log('New total files:', newFiles.length);
-      toast.success(`${validFiles.length} file(s) uploaded successfully`);
+      // Move toast outside setState to avoid render phase update
+      setTimeout(() => {
+        toast.success(`${validFiles.length} file(s) uploaded successfully`);
+      }, 0);
       return newFiles;
     });
   };
@@ -233,12 +220,8 @@ const NewInquiry = () => {
     toast.success('File deleted successfully');
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
-    
-    console.log('Submit button clicked');
-    console.log('PDF Files:', pdfFiles);
-    console.log('Form Data:', formData);
     
     if (pdfFiles.length === 0) {
       toast.error('Please upload at least one file');
@@ -260,6 +243,7 @@ const NewInquiry = () => {
     }
     
     setLoading(true);
+    setUploadProgress(0);
 
     try {
       // Use files from the table for submission
@@ -270,18 +254,22 @@ const NewInquiry = () => {
         fileMetadata: pdfFiles // Include file metadata separately
       };
       
-      const result = await inquiryAPI.createInquiry(submissionData);
+      const result = await inquiryAPI.createInquiry(submissionData, (progress) => {
+        setUploadProgress(progress);
+      });
       const response = handleApiSuccess(result);
       
       toast.success(response.message || 'Inquiry submitted successfully!');
-      navigate('/inquiries');
+      // Use replace for faster redirect (no history entry)
+      navigate('/inquiries', { replace: true });
     } catch (error) {
       const errorResponse = handleApiError(error);
       toast.error(errorResponse.error || 'Failed to submit inquiry. Please try again.');
     } finally {
       setLoading(false);
+      setUploadProgress(0);
     }
-  };
+  }, [pdfFiles, formData, navigate]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -367,13 +355,21 @@ const NewInquiry = () => {
                 </div>
 
                 {/* Submit Button */}
-                <div className="flex justify-end">
+                <div className="flex flex-col items-end gap-2">
+                  {loading && uploadProgress > 0 && (
+                    <div className="w-64 bg-gray-200 rounded-full h-2.5">
+                      <div 
+                        className="bg-green-600 h-2.5 rounded-full transition-all duration-300" 
+                        style={{ width: `${uploadProgress}%` }}
+                      ></div>
+                    </div>
+                  )}
                   <button
                     type="submit"
                     disabled={loading || pdfFiles.length === 0}
-                    className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
-                    {loading ? 'Submitting...' : 'Submit Inquiry'}
+                    {loading ? (uploadProgress > 0 ? `Uploading... ${uploadProgress}%` : 'Submitting...') : 'Submit Inquiry'}
                   </button>
                 </div>
               </form>

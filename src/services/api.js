@@ -1,27 +1,80 @@
 import axios from 'axios';
 
+// Export axios for isCancel check
+export { axios };
+
+// Helper function to normalize API URL (remove trailing /api if present to avoid double /api/api)
+const getBaseURL = () => {
+  const url = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+  // Remove trailing /api if present, then add it back to ensure single /api
+  const normalized = url.replace(/\/api\/?$/, '');
+  return `${normalized}/api`;
+};
+
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  baseURL: getBaseURL(),
   timeout: 300000, // 5 minutes timeout for file uploads and inquiry creation
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor to add auth token
+// Request cancellation map
+const cancelTokenMap = new Map();
+
+// Helper to cancel previous requests
+export const cancelPreviousRequest = (url) => {
+  const cancelToken = cancelTokenMap.get(url);
+  if (cancelToken) {
+    cancelToken.cancel('Request cancelled due to new request');
+    cancelTokenMap.delete(url);
+  }
+};
+
+// Request interceptor to add auth token and handle cancellation
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
-    console.log('API Request:', {
-      url: config.url,
-      method: config.method,
-      token: token ? `Present (${token.substring(0, 20)}...)` : 'Missing',
-      fullToken: token
-    });
+    // Only log in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('API Request:', {
+        url: config.url,
+        method: config.method,
+        token: token ? `Present (${token.substring(0, 20)}...)` : 'Missing'
+      });
+    }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Add request timestamp for cancellation
+    config.metadata = { startTime: Date.now() };
+    
+    // Only cancel previous request for GET requests with same URL
+    // Add timestamp check to prevent cancelling legitimate rapid requests
+    if (config.method === 'get') {
+      const requestKey = `${config.method}:${config.url}`;
+      const existingCancelToken = cancelTokenMap.get(requestKey);
+      
+      // Only cancel if there's an existing pending request AND it's very recent (< 50ms)
+      // This prevents cancelling legitimate rapid requests while still catching duplicates
+      if (existingCancelToken && existingCancelToken.timestamp) {
+        const timeSinceLastRequest = Date.now() - existingCancelToken.timestamp;
+        if (timeSinceLastRequest < 50) {
+          try {
+            existingCancelToken.cancel('Request cancelled due to new request');
+          } catch (e) {
+            // Request already completed, ignore
+          }
+        }
+      }
+      
+      const source = axios.CancelToken.source();
+      source.timestamp = Date.now();
+      config.cancelToken = source.token;
+      cancelTokenMap.set(requestKey, source);
+    }
+    
     return config;
   },
   (error) => {
@@ -32,40 +85,71 @@ api.interceptors.request.use(
 // Response interceptor to handle common errors
 api.interceptors.response.use(
   (response) => {
-    console.log('API Response:', {
-      url: response.config.url,
-      status: response.status,
-      success: response.data?.success
-    });
+    // Clean up cancel token on successful response
+    if (response.config.method === 'get' && response.config.url) {
+      const requestKey = `${response.config.method}:${response.config.url}`;
+      cancelTokenMap.delete(requestKey);
+    }
+    
+    // Only log in development
+    if (process.env.NODE_ENV === 'development') {
+      const duration = response.config.metadata ? Date.now() - response.config.metadata.startTime : 0;
+      console.log('API Response:', {
+        url: response.config.url,
+        status: response.status,
+        success: response.data?.success,
+        duration: `${duration}ms`
+      });
+    }
     return response;
   },
   (error) => {
-    console.error('API Error:', {
-      url: error.config?.url,
-      status: error.response?.status,
-      message: error.response?.data?.message || error.message,
-      data: error.response?.data
-    });
-    
-    // Enhanced error logging
-    if (error.response) {
-      console.error('Error Response Details:', {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data,
-        headers: error.response.headers
-      });
-    } else if (error.request) {
-      console.error('No response received:', error.request);
-    } else {
-      console.error('Error setting up request:', error.message);
+    // Clean up cancel token on error
+    if (error.config?.method === 'get' && error.config?.url) {
+      const requestKey = `${error.config.method}:${error.config.url}`;
+      cancelTokenMap.delete(requestKey);
     }
     
-    if (error.response?.status === 401) {
+    // Don't log cancellation errors - they're expected behavior
+    if (axios.isCancel(error) || error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
+      // Silently reject cancellation errors - they're not real errors
+      return Promise.reject(error);
+    }
+    
+    // Handle authentication errors (401/403)
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      const errorMessage = error.response?.data?.message || error.message;
+      
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('API Auth Error:', {
+          url: error.config?.url,
+          status: error.response?.status,
+          message: errorMessage
+        });
+      }
+      
+      // Clear token and redirect to login for auth errors
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      
+      // Only redirect if not already on login page
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+      
+      return Promise.reject(error);
     }
+    
+    // Only log other errors in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('API Error:', {
+        url: error.config?.url,
+        status: error.response?.status,
+        message: error.response?.data?.message || error.message
+      });
+    }
+    
     return Promise.reject(error);
   }
 );
@@ -97,7 +181,7 @@ export const inquiryAPI = {
   getAllInquiries: (params = {}) => api.get('/inquiry/admin/all', { params }),
   
   // Create new inquiry
-  createInquiry: (inquiryData) => {
+  createInquiry: (inquiryData, onUploadProgress) => {
     const formData = new FormData();
     
     // Add inquiry details
@@ -110,7 +194,7 @@ export const inquiryAPI = {
     formData.append('remarks', inquiryData.remarks || '');
     
     // Add required fields for backend validation
-    // Convert file metadata to parts array
+    // Convert file metadata to parts array - optimize to reduce payload
     const parts = inquiryData.fileMetadata ? inquiryData.fileMetadata.map(file => ({
       partRef: file.partRef || file.name,
       material: file.material || 'Zintec',
@@ -122,18 +206,19 @@ export const inquiryAPI = {
     
     formData.append('parts', JSON.stringify(parts));
     
-    // Add default delivery address
+    // Use user's address from profile, or fallback to defaults
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
     const deliveryAddress = {
-      street: 'Default Street',
-      city: 'Default City',
-      state: 'Default State',
-      country: 'India',
-      postalCode: '123456'
+      street: user.address?.street || user.address?.street || 'Not provided',
+      city: user.address?.city || user.city || 'Not provided',
+      state: user.address?.state || user.address?.state || 'Not provided',
+      country: user.address?.country || user.country || 'India',
+      zipCode: user.address?.zipCode || user.address?.postalCode || 'Not provided'
     };
     formData.append('deliveryAddress', JSON.stringify(deliveryAddress));
     
-    // Add special instructions
-    formData.append('specialInstructions', inquiryData.remarks || '');
+    // Add special instructions from form remark field
+    formData.append('specialInstructions', inquiryData.remark || inquiryData.remarks || '');
     
     // Add files
     if (inquiryData.files && inquiryData.files.length > 0) {
@@ -146,6 +231,10 @@ export const inquiryAPI = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      onUploadProgress: onUploadProgress ? (progressEvent) => {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        onUploadProgress(percentCompleted);
+      } : undefined,
     });
   },
   
@@ -354,6 +443,12 @@ export const adminAPI = {
   
   // Update nomenclature configuration
   updateNomenclatureConfig: (config) => api.put('/admin/nomenclature', config),
+  
+  // Get settings
+  getSettings: () => api.get('/admin/settings'),
+  
+  // Update settings
+  updateSettings: (settings) => api.put('/admin/settings', settings),
 };
 
 // Notification API

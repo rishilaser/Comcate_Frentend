@@ -1,50 +1,59 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 
-// Components
+// Components - Keep frequently used ones as regular imports
 import Header from './components/layout/Header';
 import InternalHeader from './components/layout/InternalHeader';
 import Footer from './components/layout/Footer';
-
-// Pages
-import Home from './pages/Home';
-import SignUp from './pages/auth/SignUp';
-import Login from './pages/auth/Login';
-import Dashboard from './pages/Dashboard';
-import NewInquiry from './pages/inquiry/NewInquiry';
-import InquiryList from './pages/inquiry/InquiryList';
-import InquiryDetail from './pages/inquiry/InquiryDetail';
-import OrderList from './pages/order/OrderList';
-import OrderDetail from './pages/order/OrderDetail';
-import OrderTracking from './pages/order/OrderTracking';
-import PaymentPage from './pages/order/PaymentPage';
-import BackOfficeDashboard from './pages/BackOfficeDashboard';
-import BackOfficeMaterialManagement from './pages/BackOfficeMaterialManagement';
-import ComponentManagerPage from './pages/ComponentManagerPage';
-import ComponentManagerDetail from './pages/ComponentManagerDetail';
-import QuotationResponse from './pages/inquiry/QuotationResponse';
-import QuotationPayment from './pages/payment/QuotationPayment';
-import OrderManagement from './pages/order/OrderManagement';
-import ServiceContact from './pages/ServiceContact';
-import About from './pages/About';
-import Services from './pages/Services';
-import Profile from './pages/Profile';
-import Parts from './pages/Parts';
-import Tools from './pages/Tools';
-import NotFound from './pages/NotFound';
 import AdminLayout from './components/layout/AdminLayout';
-import { useAuth } from './contexts/AuthContext';
 
-// Create a client
+// Pages - Lazy load for faster initial page load
+const Home = lazy(() => import('./pages/Home'));
+const SignUp = lazy(() => import('./pages/auth/SignUp'));
+const Login = lazy(() => import('./pages/auth/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const NewInquiry = lazy(() => import('./pages/inquiry/NewInquiry'));
+const InquiryList = lazy(() => import('./pages/inquiry/InquiryList'));
+const InquiryDetail = lazy(() => import('./pages/inquiry/InquiryDetail'));
+const OrderList = lazy(() => import('./pages/order/OrderList'));
+const OrderDetail = lazy(() => import('./pages/order/OrderDetail'));
+const OrderTracking = lazy(() => import('./pages/order/OrderTracking'));
+const PaymentPage = lazy(() => import('./pages/order/PaymentPage'));
+const BackOfficeDashboard = lazy(() => import('./pages/BackOfficeDashboard'));
+const BackOfficeMaterialManagement = lazy(() => import('./pages/BackOfficeMaterialManagement'));
+const ComponentManagerPage = lazy(() => import('./pages/ComponentManagerPage'));
+const ComponentManagerDetail = lazy(() => import('./pages/ComponentManagerDetail'));
+const QuotationResponse = lazy(() => import('./pages/inquiry/QuotationResponse'));
+const QuotationPayment = lazy(() => import('./pages/payment/QuotationPayment'));
+const OrderManagement = lazy(() => import('./pages/order/OrderManagement'));
+const ServiceContact = lazy(() => import('./pages/ServiceContact'));
+const About = lazy(() => import('./pages/About'));
+const Services = lazy(() => import('./pages/Services'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Parts = lazy(() => import('./pages/Parts'));
+const Tools = lazy(() => import('./pages/Tools'));
+const Upload = lazy(() => import('./pages/Upload'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+
+// Loading component
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+  </div>
+);
+
+// Create a client with optimized caching
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      staleTime: 30000, // Consider data fresh for 30 seconds
+      cacheTime: 300000, // Keep unused data in cache for 5 minutes
     },
   },
 });
@@ -104,7 +113,8 @@ function App() {
         <AuthProvider>
           <Router>
             <div className="App">
-          <Routes>
+              <Suspense fallback={<LoadingSpinner />}>
+                <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Home />} />
             <Route path="/about" element={
@@ -126,6 +136,13 @@ function App() {
               <Layout>
                 <Tools />
               </Layout>
+            } />
+            <Route path="/upload" element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <Upload />
+                </AdminLayout>
+              </ProtectedRoute>
             } />
             <Route path="/contact" element={
               <Layout>
@@ -280,8 +297,9 @@ function App() {
                 <NotFound />
               </Layout>
             } />
-          </Routes>
-          <Toaster position="top-right" />
+                </Routes>
+              </Suspense>
+              <Toaster position="top-right" />
             </div>
           </Router>
         </AuthProvider>

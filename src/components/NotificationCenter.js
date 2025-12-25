@@ -13,7 +13,7 @@ const NotificationCenter = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
 
-  // Fetch notifications
+  // Fetch notifications - optimized to prevent multiple calls
   const { data: notificationData, refetch } = useQuery(
     'notifications',
     async () => {
@@ -21,13 +21,18 @@ const NotificationCenter = () => {
         const response = await notificationAPI.getNotifications();
         return response.data.notifications || [];
       } catch (error) {
-        console.error('Failed to fetch notifications:', error);
+        // Don't log cancellation errors
+        if (error.name !== 'CanceledError' && process.env.NODE_ENV === 'development') {
+          console.error('Failed to fetch notifications:', error);
+        }
         return [];
       }
     },
     {
-      refetchInterval: 30000, // Refetch every 30 seconds
-      refetchOnWindowFocus: true
+      refetchInterval: 60000, // Refetch every 60 seconds (reduced frequency)
+      refetchOnWindowFocus: false, // Disable refetch on window focus to prevent multiple calls
+      staleTime: 30000, // Consider data fresh for 30 seconds
+      cacheTime: 300000, // Keep in cache for 5 minutes
     }
   );
 
