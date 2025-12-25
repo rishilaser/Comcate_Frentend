@@ -9,19 +9,27 @@ class WebSocketService {
   }
 
   connect() {
+    // Don't connect if already connected or connecting
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
     const token = localStorage.getItem('token');
     if (!token) {
       console.warn('No authentication token found, skipping WebSocket connection');
       return;
     }
 
-    const wsUrl = `${process.env.REACT_APP_WS_URL || 'ws://localhost:5000'}/ws?token=${token}`;
+    // Get base URL from API URL
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+    const baseUrl = apiUrl.replace(/\/api$/, '').replace(/^http/, 'ws');
+    const wsUrl = `${baseUrl}/ws?token=${token}`;
     
     try {
       this.ws = new WebSocket(wsUrl);
       
       this.ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('✅ WebSocket connected successfully');
         this.isConnected = true;
         this.reconnectAttempts = 0;
         this.emit('connection', { status: 'connected' });
@@ -30,7 +38,10 @@ class WebSocketService {
       this.ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log('WebSocket message received:', data);
+          // Only log in development
+          if (process.env.NODE_ENV === 'development') {
+            console.log('WebSocket message received:', data);
+          }
           this.emit(data.type || 'message', data);
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -38,7 +49,10 @@ class WebSocketService {
       };
 
       this.ws.onclose = (event) => {
-        console.log('WebSocket disconnected:', event.code, event.reason);
+        // Only log in development
+        if (process.env.NODE_ENV === 'development') {
+          console.log('WebSocket disconnected:', event.code, event.reason);
+        }
         this.isConnected = false;
         this.emit('connection', { status: 'disconnected' });
         
@@ -49,12 +63,19 @@ class WebSocketService {
       };
 
       this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        this.emit('error', error);
+        // Only log in development - don't show errors to user
+        if (process.env.NODE_ENV === 'development') {
+          console.error('WebSocket error:', error);
+        }
+        // Don't emit error to avoid showing error messages
+        // The connection will automatically retry
       };
 
     } catch (error) {
-      console.error('Failed to create WebSocket connection:', error);
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to create WebSocket connection:', error);
+      }
     }
   }
 

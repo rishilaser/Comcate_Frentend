@@ -135,10 +135,11 @@ const Profile = () => {
     
     try {
       setOrdersLoading(true);
-      const response = await orderAPI.getCustomerOrders(user._id);
+      // Use customer API endpoint (uses authenticated user's ID from token)
+      const response = await orderAPI.getCustomerOrders();
       
       if (response.data.success) {
-        const transformedOrders = response.data.orders.map(order => ({
+        const transformedOrders = (response.data.orders || []).map(order => ({
           id: order._id,
           orderNumber: order.orderNumber,
           status: order.status.charAt(0).toUpperCase() + order.status.slice(1).replace('_', ' '),
@@ -151,6 +152,10 @@ const Profile = () => {
         setOrders([]);
       }
     } catch (error) {
+      // Ignore cancellation errors
+      if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
+        return;
+      }
       console.error('Error fetching orders:', error);
       setOrders([]);
     } finally {

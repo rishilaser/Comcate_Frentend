@@ -23,16 +23,30 @@ export const useWebSocket = () => {
 
       // Set up ping interval to keep connection alive
       const pingInterval = setInterval(() => {
-        if (websocketService.getConnectionStatus().isConnected) {
+        const status = websocketService.getConnectionStatus();
+        if (status.isConnected && status.readyState === 1) { // WebSocket.OPEN = 1
           websocketService.ping();
+        } else if (!status.isConnected) {
+          // Try to reconnect if disconnected
+          websocketService.connect();
         }
       }, 30000); // Ping every 30 seconds
+
+      // Initial connection status check
+      const status = websocketService.getConnectionStatus();
+      setIsConnected(status.isConnected);
+      setConnectionStatus(status.isConnected ? 'connected' : 'disconnected');
 
       return () => {
         websocketService.unsubscribe('connection', handleConnection);
         clearInterval(pingInterval);
-        websocketService.disconnect();
+        // Don't disconnect on unmount - keep connection alive for other components
       };
+    } else {
+      // Disconnect if user logs out
+      websocketService.disconnect();
+      setIsConnected(false);
+      setConnectionStatus('disconnected');
     }
   }, [user?._id]);
 

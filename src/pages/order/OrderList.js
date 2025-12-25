@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { orderAPI } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -12,21 +12,24 @@ const OrderList = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
+  const fetchingRef = useRef(false);
 
   useEffect(() => {
     if (user?._id) {
       fetchOrders();
       
-      // Set up real-time polling for order updates (fallback)
+      // Set up real-time polling for order updates (fallback when WebSocket is offline)
+      // Poll every 15 seconds if WebSocket is not connected, otherwise every 60 seconds
+      const pollInterval = isConnected ? 60000 : 15000;
+      
       const interval = setInterval(() => {
-        if (!isConnected) {
-          fetchOrders();
-        }
-      }, 30000); // Poll every 30 seconds only if WebSocket is not connected
+        fetchOrders();
+      }, pollInterval);
       
       return () => clearInterval(interval);
     }
-  }, [user, isConnected]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id, isConnected]);
 
   // WebSocket real-time updates
   useEffect(() => {
@@ -34,85 +37,98 @@ const OrderList = () => {
 
     const unsubscribeOrderUpdate = subscribe('order_update', (data) => {
       console.log('Order update received:', data);
-      setOrders(prevOrders => 
-        prevOrders.map(order => 
-          order._id === data.data?.orderId 
-            ? { ...order, status: data.data.newStatus, updatedAt: new Date() }
-            : order
-        )
-      );
-      toast.success(`Order ${data.data?.orderNumber} status updated to ${data.data?.newStatus}`);
+      // Refresh orders list to get latest data
+      fetchOrders();
+      if (data.data?.orderNumber) {
+        toast.success(`Order ${data.data.orderNumber} status updated to ${data.data.newStatus || 'updated'}`);
+      }
     });
 
     const unsubscribeDispatch = subscribe('dispatch', (data) => {
       console.log('Dispatch update received:', data);
-      setOrders(prevOrders => 
-        prevOrders.map(order => 
-          order._id === data.data?.orderId 
-            ? { 
-                ...order, 
-                status: 'dispatched',
-                dispatch: data.data,
-                updatedAt: new Date()
-              }
-            : order
-        )
-      );
-      toast.success(`Order ${data.data?.orderNumber} has been dispatched!`);
+      // Refresh orders list to get latest data
+      fetchOrders();
+      if (data.data?.orderNumber) {
+        toast.success(`Order ${data.data.orderNumber} has been dispatched!`);
+      }
+    });
+
+    const unsubscribePayment = subscribe('payment', (data) => {
+      console.log('Payment update received:', data);
+      // Refresh orders list to get latest data
+      fetchOrders();
+      if (data.data?.orderNumber) {
+        toast.success(`Payment received for order ${data.data.orderNumber}`);
+      }
     });
 
     return () => {
       unsubscribeOrderUpdate();
       unsubscribeDispatch();
+      unsubscribePayment();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?._id, subscribe]);
 
   const fetchOrders = async () => {
+    // Prevent duplicate fetches
+    if (fetchingRef.current) {
+      return;
+    }
+
     try {
+      fetchingRef.current = true;
       setLoading(true);
       if (!user?._id) {
         setOrders([]);
         return;
       }
       
-      // Use customer-specific API endpoint
-      const response = await orderAPI.getCustomerOrders(user._id);
+      // Use customer API endpoint (uses authenticated user's ID from token)
+      const response = await orderAPI.getCustomerOrders();
       
       if (response.data.success) {
-        setOrders(response.data.orders);
+        setOrders(response.data.orders || []);
       } else {
         setOrders([]);
-        toast.error(response.data.message || 'No orders found');
+        // Don't show error if no orders found - that's normal
+        if (response.data.message && !response.data.message.includes('No orders')) {
+          toast.error(response.data.message);
+        }
       }
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      // Ignore cancellation errors
+      if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
+        return;
+      }
       
-      // Fallback to mock data if API fails
-      setOrders([
-        {
-          _id: '68c519d8988fbbd8c570359d',
-          id: '68c519d8988fbbd8c570359d',
-          orderNumber: 'ORD250913780',
-          inquiryNumber: 'INQ-000001',
-          status: 'pending',
-          payment: { status: 'pending' },
-          totalAmount: 250.00,
-          createdAt: '2025-09-13T12:44:32.000Z'
-        },
-        {
-          _id: '68c3db52767a97d01b3db1ae',
-          id: '68c3db52767a97d01b3db1ae',
-          orderNumber: 'ORD-000001',
-          inquiryNumber: 'INQ-000001',
-          status: 'delivered',
-          payment: { status: 'completed' },
-          totalAmount: 250.00,
-          createdAt: '2025-09-12T14:05:30.000Z'
+      // Only log real errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching orders:', error);
+      }
+      
+      // Handle specific errors
+      if (error.response?.status === 403) {
+        toast.error('Access denied. You do not have permission to view orders.');
+      } else if (error.response?.status === 404) {
+        // No orders found is normal, don't show error
+        setOrders([]);
+      } else if (error.response?.status === 401) {
+        // 401 is handled by axios interceptor
+        // Don't show error here
+      } else {
+        // Only show error for actual failures, not for "no orders found"
+        if (error.response?.status !== 404) {
+          // Don't show error for network issues - polling will retry
+          if (error.message !== 'Network Error') {
+            toast.error('Failed to fetch orders. Please try again.');
+          }
         }
-      ]);
-      toast.error('Backend connection failed - showing mock data');
+        setOrders([]);
+      }
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
 
@@ -193,9 +209,9 @@ const OrderList = () => {
                 <p className="mt-2 text-gray-600">Track and manage your orders</p>
               </div>
               <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                <span className="text-sm text-gray-600">
-                  {isConnected ? 'Real-time updates active' : 'Real-time updates offline'}
+                <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></div>
+                <span className={`text-sm ${isConnected ? 'text-green-600' : 'text-yellow-600'}`}>
+                  {isConnected ? 'Real-time updates active' : 'Polling mode (updates every 15s)'}
                 </span>
               </div>
             </div>

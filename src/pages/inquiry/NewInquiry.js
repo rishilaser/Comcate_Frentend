@@ -37,11 +37,10 @@ const NewInquiry = () => {
   // Define fetchMaterialData before useEffect to avoid hoisting issues
   const fetchMaterialData = useCallback(async () => {
     try {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 Fetching material data from admin...');
-      }
-      
-      const response = await axios.get(`${API_URL}/api/admin/materials`);
+      // Set timeout for materials API (5 seconds)
+      const response = await axios.get(`${API_URL}/api/admin/materials`, {
+        timeout: 5000
+      });
       
       if (response.data.success && response.data.materialData) {
         const activeMaterials = response.data.materialData.filter(m => m.status === 'Active');
@@ -49,25 +48,25 @@ const NewInquiry = () => {
         if (activeMaterials.length > 0) {
           setMaterialData(activeMaterials);
         } else {
+          // Don't show error if no active materials - just set empty array
           setMaterialData([]);
-          toast.error('⚠️ No materials found! Please ask admin to add materials first.', {
-            duration: 5000
-          });
+          // Only show warning in development
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('⚠️ No active materials found');
+          }
         }
       } else {
         setMaterialData([]);
-        toast.error('⚠️ No materials in database! Please contact admin.', {
-          duration: 5000
-        });
+        // Don't show error - just set empty array
       }
     } catch (error) {
+      // Only log in development, don't show error to user
       if (process.env.NODE_ENV === 'development') {
         console.error('❌ Error fetching material data:', error);
       }
-      toast.error('❌ Failed to load materials. Please check backend server.', {
-        duration: 5000
-      });
+      // Set empty array silently - form will still work with default values
       setMaterialData([]);
+      // Don't show error toast - it's not critical for form functionality
     }
   }, [API_URL]);
 
@@ -105,9 +104,9 @@ const NewInquiry = () => {
         const extension = file.name.split('.').pop().toLowerCase();
         const isValidType = ['dwg', 'dxf', 'zip', 'pdf', 'xlsx', 'xls'].includes(extension);
         
-        // Validate PDF file size (5MB limit)
-        if (extension === 'pdf' && file.size > 5 * 1024 * 1024) {
-          toast.error(`PDF file "${file.name}" exceeds 5MB limit. File size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+        // Validate ALL file types - 5MB limit for all files
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error(`File "${file.name}" exceeds 5MB limit. File size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
           return false;
         }
         
@@ -117,7 +116,7 @@ const NewInquiry = () => {
       if (validFiles.length !== files.length) {
         const invalidCount = files.length - validFiles.length;
         if (invalidCount > 0) {
-          toast.error(`${invalidCount} file(s) rejected. Only DWG, DXF, ZIP, PDF (max 5MB), XLSX, and XLS files are allowed`);
+          toast.error(`${invalidCount} file(s) rejected. Only files up to 5MB are allowed (DWG, DXF, ZIP, PDF, XLSX, XLS)`);
         }
       }
       
@@ -185,9 +184,9 @@ const NewInquiry = () => {
       const extension = file.name.split('.').pop().toLowerCase();
       const isValidType = ['dwg', 'dxf', 'zip', 'pdf', 'xlsx', 'xls'].includes(extension);
       
-      // Validate PDF file size (5MB limit)
-      if (extension === 'pdf' && file.size > 5 * 1024 * 1024) {
-        toast.error(`PDF file "${file.name}" exceeds 5MB limit. File size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+      // Validate ALL file types - 5MB limit for all files
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`File "${file.name}" exceeds 5MB limit. File size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
         return false;
       }
       
@@ -197,7 +196,7 @@ const NewInquiry = () => {
     if (validFiles.length !== files.length) {
       const invalidCount = files.length - validFiles.length;
       if (invalidCount > 0) {
-        toast.error(`${invalidCount} file(s) rejected. Only DWG, DXF, ZIP, PDF (max 5MB), XLSX, and XLS files are allowed`);
+        toast.error(`${invalidCount} file(s) rejected. Only files up to 5MB are allowed (DWG, DXF, ZIP, PDF, XLSX, XLS)`);
       }
     }
     
@@ -283,8 +282,15 @@ const NewInquiry = () => {
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     
+    const MAX_FILES = 100;
+    
     if (pdfFiles.length === 0) {
       toast.error('Please upload at least one file');
+      return;
+    }
+    
+    if (pdfFiles.length > MAX_FILES) {
+      toast.error(`Maximum ${MAX_FILES} files allowed. You have ${pdfFiles.length} files. Please remove ${pdfFiles.length - MAX_FILES} file(s).`);
       return;
     }
     
@@ -361,10 +367,10 @@ const NewInquiry = () => {
                       Drag files to upload or
                     </p>
                     <p className="text-sm font-semibold text-gray-700 mb-2">
-                      Maximum file size: <span className="text-green-600">5MB</span> (PDF files only)
+                      Maximum file size: <span className="text-green-600">5MB</span> (all file types)
                     </p>
                     <p className="text-sm font-semibold text-gray-700 mb-3">
-                      Maximum files: <span className="text-green-600">100</span> files per inquiry
+                      Maximum files: <span className="text-green-600">100</span> files per inquiry (optional)
                     </p>
                     <label className="bg-green-600 text-white px-8 py-3 rounded-lg text-lg font-medium hover:bg-green-700 transition-colors duration-200 shadow-lg cursor-pointer">
                     Upload Drawing
@@ -377,11 +383,11 @@ const NewInquiry = () => {
                       />
                     </label>
                     <p className="text-sm text-gray-500 mt-4">
-                      Allowed extensions: dwg, dxf, zip, pdf (max 5MB), xlsx, xls
+                      Allowed extensions: dwg, dxf, zip, pdf, xlsx, xls (max 5MB each)
                     </p>
                     {pdfFiles.length > 0 && (
                       <p className="text-sm text-gray-600 mt-2 font-medium">
-                        Files uploaded: <span className={pdfFiles.length >= 100 ? 'text-red-600' : 'text-green-600'}>{pdfFiles.length}/100</span>
+                        Files uploaded: <span className={pdfFiles.length >= 100 ? 'text-green-600' : 'text-gray-600'}>{pdfFiles.length}/100</span>
                       </p>
                     )}
                   </div>
@@ -437,11 +443,16 @@ const NewInquiry = () => {
                   )}
                   <button
                     type="submit"
-                    disabled={loading || pdfFiles.length === 0}
+                    disabled={loading || pdfFiles.length === 0 || pdfFiles.length > 100}
                     className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     {loading ? (uploadProgress > 0 ? `Uploading... ${uploadProgress}%` : 'Submitting...') : 'Submit Inquiry'}
                   </button>
+                  {pdfFiles.length > 100 && (
+                    <p className="text-sm text-red-600 mt-1">
+                      Maximum 100 files allowed. Please remove {pdfFiles.length - 100} file(s).
+                    </p>
+                  )}
                 </div>
               </form>
             </div>

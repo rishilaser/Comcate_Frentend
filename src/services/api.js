@@ -332,8 +332,8 @@ export const orderAPI = {
   // Get all orders for current user
   getOrders: (params = {}) => api.get('/orders/customer', { params }),
   
-  // Get customer orders
-  getCustomerOrders: (customerId) => api.get(`/orders/customer/${customerId}`),
+  // Get customer orders (uses authenticated user's ID from token)
+  getCustomerOrders: () => api.get('/orders/customer'),
   
   // Get single order
   getOrder: (id) => api.get(`/orders/${id}`),
