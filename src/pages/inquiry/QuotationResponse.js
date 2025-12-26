@@ -4,6 +4,7 @@ import { quotationAPI, inquiryAPI } from '../../services/api';
 import { axios } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
+import useQuotationPDFDownload from '../../hooks/useQuotationPDFDownload';
 
 const QuotationResponse = () => {
   const { id } = useParams();
@@ -14,6 +15,7 @@ const QuotationResponse = () => {
   const [acceptLoading, setAcceptLoading] = useState(false);
   const [rejectLoading, setRejectLoading] = useState(false);
   const fetchingRef = useRef(false); // Prevent duplicate fetches
+  const { viewPDF, downloadPDF, downloading, viewing } = useQuotationPDFDownload();
 
   useEffect(() => {
     // Wait for auth to load before fetching quotation
@@ -313,136 +315,44 @@ const QuotationResponse = () => {
                 {/* PDF Actions */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <button
-                    onClick={async () => {
-                      try {
-                        const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-                        const token = localStorage.getItem('token');
-                        const apiPdfUrl = `${apiBaseUrl}/quotation/${id}/pdf`;
-                        
-                        const response = await fetch(apiPdfUrl, {
-                          headers: {
-                            'Authorization': `Bearer ${token}`
-                          }
-                        });
-                        
-                        if (response.ok) {
-                          const blob = await response.blob();
-                          const url = window.URL.createObjectURL(blob);
-                          window.open(url, '_blank');
-                        } else {
-                          const errorData = await response.json().catch(() => ({}));
-                          console.error('PDF view error:', errorData);
-                          toast.error(errorData.message || 'Failed to view PDF. Please try downloading instead.');
-                        }
-                      } catch (error) {
-                        console.error('Error viewing PDF:', error);
-                        toast.error('Failed to view PDF. Please try downloading instead.');
-                      }
-                    }}
-                    className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 shadow-lg hover:shadow-xl transition-all"
+                    onClick={() => viewPDF(id, quotation)}
+                    disabled={viewing || downloading}
+                    className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                    View Quotation PDF
+                    {viewing ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                        Opening...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        View Quotation PDF
+                      </>
+                    )}
                   </button>
                   
                   <button
-                    onClick={async () => {
-                      try {
-                        console.log('📄 ===== FRONTEND: PDF DOWNLOAD START =====');
-                        console.log('📋 Quotation Details:');
-                        console.log('   - Quotation ID:', quotation?._id || id);
-                        console.log('   - Quotation Number:', quotation?.quotationNumber);
-                        
-                        const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-                        const token = localStorage.getItem('token');
-                        const quotationId = quotation?._id || id;
-                        const apiPdfUrl = `${apiBaseUrl}/quotation/${quotationId}/pdf?download=true`;
-                        
-                        console.log('🌐 Request URL:', apiPdfUrl);
-                        
-                        const response = await fetch(apiPdfUrl, {
-                          headers: {
-                            'Authorization': `Bearer ${token}`
-                          }
-                        });
-                        
-                        console.log('📥 Response Status:', response.status);
-                        console.log('📥 Response Headers:', {
-                          'Content-Type': response.headers.get('Content-Type'),
-                          'Content-Length': response.headers.get('Content-Length')
-                        });
-                        
-                        if (response.ok) {
-                          const blob = await response.blob();
-                          
-                          console.log('📦 Blob Details:');
-                          console.log('   - Blob Size:', blob.size, 'bytes');
-                          console.log('   - Blob Type:', blob.type);
-                          
-                          // Validate blob
-                          if (blob.size === 0) {
-                            console.error('❌ Blob is empty!');
-                            toast.error('Downloaded PDF is empty. Please try again.');
-                            return;
-                          }
-                          
-                          if (blob.type !== 'application/pdf' && !blob.type.includes('pdf')) {
-                            console.warn('⚠️  Blob type is not PDF:', blob.type);
-                            const text = await blob.text();
-                            console.error('Response text:', text);
-                            try {
-                              const errorData = JSON.parse(text);
-                              toast.error(errorData.message || 'Failed to download PDF');
-                            } catch (e) {
-                              toast.error('Invalid PDF format received');
-                            }
-                            return;
-                          }
-                          
-                          // Validate PDF header
-                          const arrayBuffer = await blob.slice(0, 4).arrayBuffer();
-                          const uint8Array = new Uint8Array(arrayBuffer);
-                          const pdfHeader = String.fromCharCode(...uint8Array);
-                          console.log('📄 PDF Header:', pdfHeader);
-                          
-                          if (pdfHeader !== '%PDF') {
-                            console.error('❌ Invalid PDF header:', pdfHeader);
-                            toast.error('Downloaded file is not a valid PDF. Please try again.');
-                            return;
-                          }
-                          
-                          console.log('✅ PDF is valid, creating download...');
-                          
-                          const url = window.URL.createObjectURL(blob);
-                          const link = document.createElement('a');
-                          link.href = url;
-                          link.download = quotation?.quotationPdf || `quotation-${quotation?.quotationNumber || quotationId}.pdf`;
-                          document.body.appendChild(link);
-                          link.click();
-                          document.body.removeChild(link);
-                          window.URL.revokeObjectURL(url);
-                          
-                          console.log('✅ PDF downloaded successfully');
-                          toast.success('PDF downloaded successfully');
-                        } else {
-                          const errorData = await response.json().catch(() => ({}));
-                          console.error('❌ PDF download error:', errorData);
-                          toast.error(errorData.message || 'Failed to download PDF');
-                        }
-                      } catch (error) {
-                        console.error('❌ Error downloading PDF:', error);
-                        toast.error('Failed to download PDF: ' + error.message);
-                      }
-                    }}
-                    className="inline-flex items-center justify-center px-6 py-3 border-2 border-gray-300 text-base font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 shadow hover:shadow-lg transition-all"
+                    onClick={() => downloadPDF(id, quotation)}
+                    disabled={downloading || viewing}
+                    className="inline-flex items-center justify-center px-6 py-3 border-2 border-gray-300 text-base font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 shadow hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Download PDF
+                    {downloading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-700 mr-2"></div>
+                        Downloading...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download PDF
+                      </>
+                    )}
                   </button>
                 </div>
 

@@ -92,6 +92,42 @@ const NewInquiry = () => {
     }
   };
 
+  // Validation helper function
+  const validateFile = (file) => {
+    // Check if file exists
+    if (!file) {
+      return { valid: false, error: 'File is required' };
+    }
+
+    // Check file extension
+    const extension = file.name.split('.').pop().toLowerCase();
+    const allowedExtensions = ['dwg', 'dxf', 'zip', 'pdf', 'xlsx', 'xls'];
+    
+    if (!extension || !allowedExtensions.includes(extension)) {
+      return { 
+        valid: false, 
+        error: `File "${file.name}" has invalid extension. Only ${allowedExtensions.join(', ').toUpperCase()} files are allowed.` 
+      };
+    }
+
+    // Check file size - strict 5MB limit (5 * 1024 * 1024 bytes)
+    const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+    if (file.size > maxSize) {
+      const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
+      return { 
+        valid: false, 
+        error: `File "${file.name}" exceeds 5MB limit. File size: ${fileSizeMB}MB. Maximum allowed: 5MB.` 
+      };
+    }
+
+    // Check if file size is 0 or invalid
+    if (file.size === 0 || !file.size) {
+      return { valid: false, error: `File "${file.name}" is empty or invalid.` };
+    }
+
+    return { valid: true, error: null };
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -99,33 +135,29 @@ const NewInquiry = () => {
     
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const files = Array.from(e.dataTransfer.files);
+      const validFiles = [];
+      const errors = [];
       
-      const validFiles = files.filter(file => {
-        const extension = file.name.split('.').pop().toLowerCase();
-        const isValidType = ['dwg', 'dxf', 'zip', 'pdf', 'xlsx', 'xls'].includes(extension);
-        
-        // Validate ALL file types - 5MB limit for all files
-        if (file.size > 5 * 1024 * 1024) {
-          toast.error(`File "${file.name}" exceeds 5MB limit. File size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
-          return false;
+      // Validate each file strictly
+      files.forEach(file => {
+        const validation = validateFile(file);
+        if (validation.valid) {
+          validFiles.push(file);
+        } else {
+          errors.push(validation.error);
+          toast.error(validation.error);
         }
-        
-        return isValidType;
       });
       
-      if (validFiles.length !== files.length) {
-        const invalidCount = files.length - validFiles.length;
-        if (invalidCount > 0) {
-          toast.error(`${invalidCount} file(s) rejected. Only files up to 5MB are allowed (DWG, DXF, ZIP, PDF, XLSX, XLS)`);
-        }
+      // Show summary if any files were rejected
+      if (errors.length > 0) {
+        toast.error(`${errors.length} file(s) rejected. Please check file size (max 5MB) and extensions (DWG, DXF, ZIP, PDF, XLSX, XLS).`);
       }
       
+      // Only proceed if we have valid files
       if (validFiles.length === 0) {
-        toast.error('No valid files dropped');
         return;
       }
-      
-      // No file limit - unlimited files allowed
       
       // Process ALL files for the table - use admin's material data
       if (materialData.length === 0) {
@@ -163,32 +195,36 @@ const NewInquiry = () => {
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
     
-    const validFiles = files.filter(file => {
-      const extension = file.name.split('.').pop().toLowerCase();
-      const isValidType = ['dwg', 'dxf', 'zip', 'pdf', 'xlsx', 'xls'].includes(extension);
-      
-      // Validate ALL file types - 5MB limit for all files
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error(`File "${file.name}" exceeds 5MB limit. File size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
-        return false;
-      }
-      
-      return isValidType;
-    });
+    // Reset input to allow selecting same file again
+    e.target.value = '';
     
-    if (validFiles.length !== files.length) {
-      const invalidCount = files.length - validFiles.length;
-      if (invalidCount > 0) {
-        toast.error(`${invalidCount} file(s) rejected. Only files up to 5MB are allowed (DWG, DXF, ZIP, PDF, XLSX, XLS)`);
-      }
-    }
-    
-    if (validFiles.length === 0) {
-      toast.error('No valid files selected');
+    if (files.length === 0) {
       return;
     }
     
-    // No file limit - unlimited files allowed
+    const validFiles = [];
+    const errors = [];
+    
+    // Validate each file strictly
+    files.forEach(file => {
+      const validation = validateFile(file);
+      if (validation.valid) {
+        validFiles.push(file);
+      } else {
+        errors.push(validation.error);
+        toast.error(validation.error);
+      }
+    });
+    
+    // Show summary if any files were rejected
+    if (errors.length > 0) {
+      toast.error(`${errors.length} file(s) rejected. Please check file size (max 5MB) and extensions (DWG, DXF, ZIP, PDF, XLSX, XLS).`);
+    }
+    
+    // Only proceed if we have valid files
+    if (validFiles.length === 0) {
+      return;
+    }
     
     // Process ALL files for the table (not just PDFs) - use admin's material data
     if (materialData.length === 0) {
