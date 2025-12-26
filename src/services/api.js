@@ -288,7 +288,12 @@ export const quotationAPI = {
   getQuotations: (params = {}) => api.get('/quotation/customer', { params }),
   
   // Get single quotation by ID
-  getQuotation: (id) => api.get(`/quotation/id/${id}`),
+  getQuotation: (id) => {
+    if (!id || id === 'undefined' || id === 'null') {
+      return Promise.reject(new Error('Invalid quotation ID provided'));
+    }
+    return api.get(`/quotation/id/${id}`);
+  },
   
   // Get all quotations (Admin - can see all quotations)
   getAllQuotations: (params = {}) => api.get('/quotation', { params }),

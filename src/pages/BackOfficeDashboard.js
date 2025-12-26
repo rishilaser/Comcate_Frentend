@@ -229,43 +229,8 @@ const BackOfficeDashboard = () => {
       const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
       const token = localStorage.getItem('token');
       
-      // Check if Cloudinary URL exists first (preferred method)
-      if (quotation.quotationPdfCloudinaryUrl) {
-        // Direct download from Cloudinary - add download parameter
-        const cloudinaryUrl = quotation.quotationPdfCloudinaryUrl;
-        // For Cloudinary, we can use the URL directly or add fl_attachment for download
-        const downloadUrl = cloudinaryUrl.includes('?') 
-          ? `${cloudinaryUrl}&fl_attachment`
-          : `${cloudinaryUrl}?fl_attachment`;
-        
-        // Create a temporary link to trigger download
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = `quotation_${quotation.quotationNumber || quotation._id}.pdf`;
-        link.target = '_blank';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        toast.success('PDF download started!');
-        return;
-      }
-      
-      // Check if quotationPdf is a Cloudinary URL (starts with http)
-      if (quotation.quotationPdf && quotation.quotationPdf.startsWith('http')) {
-        const link = document.createElement('a');
-        link.href = quotation.quotationPdf;
-        link.download = `quotation_${quotation.quotationNumber || quotation._id}.pdf`;
-        link.target = '_blank';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        toast.success('PDF download started!');
-        return;
-      }
-      
-      // Fallback to API endpoint for database-stored PDFs
+      // Always use API endpoint to avoid 401 errors with Cloudinary
+      // The backend will handle fetching from Cloudinary if needed
       const apiPdfUrl = `${apiBaseUrl}/quotation/${quotation._id}/pdf?download=true`;
       
       const response = await fetch(apiPdfUrl, {

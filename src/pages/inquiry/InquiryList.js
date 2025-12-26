@@ -13,6 +13,15 @@ const InquiryList = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
+  // Helper function to get valid quotation ID
+  const getQuotationId = (quotation) => {
+    const id = quotation?._id || quotation?.id;
+    if (!id || id === 'undefined' || id === 'null') {
+      return null;
+    }
+    return id;
+  };
+
   useEffect(() => {
     fetchInquiries();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -346,43 +355,51 @@ const InquiryList = () => {
                           </div>
                         </div>
                         
-                        {inquiry.quotation.status === 'sent' && (
-                          <div className="flex flex-col space-y-2">
-                            <Link
-                              to={`/quotation/${inquiry.quotation.id}/response`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center justify-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-1 focus:ring-green-500"
-                            >
-                              ✓ Accept Quotation
-                            </Link>
-                            <Link
-                              to={`/quotation/${inquiry.quotation.id}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center justify-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            >
-                              View Details
-                            </Link>
-                          </div>
-                        )}
+                        {inquiry.quotation.status === 'sent' && (() => {
+                          const quotationId = getQuotationId(inquiry.quotation);
+                          if (!quotationId) return null;
+                          return (
+                            <div className="flex flex-col space-y-2">
+                              <Link
+                                to={`/quotation/${quotationId}/response`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center justify-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-1 focus:ring-green-500"
+                              >
+                                ✓ Accept Quotation
+                              </Link>
+                              <Link
+                                to={`/quotation/${quotationId}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center justify-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                View Details
+                              </Link>
+                            </div>
+                          );
+                        })()}
                         
-                        {inquiry.quotation.status === 'accepted' && (
-                          <div className="flex flex-col space-y-2">
-                            <Link
-                              to={`/quotation/${inquiry.quotation.id}/payment`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center justify-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            >
-                              💳 Make Payment
-                            </Link>
-                            <Link
-                              to={`/quotation/${inquiry.quotation.id}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center justify-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            >
-                              View Details
-                            </Link>
-                          </div>
-                        )}
+                        {inquiry.quotation.status === 'accepted' && (() => {
+                          const quotationId = getQuotationId(inquiry.quotation);
+                          if (!quotationId) return null;
+                          return (
+                            <div className="flex flex-col space-y-2">
+                              <Link
+                                to={`/quotation/${quotationId}/payment`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center justify-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                💳 Make Payment
+                              </Link>
+                              <Link
+                                to={`/quotation/${quotationId}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center justify-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                View Details
+                              </Link>
+                            </div>
+                          );
+                        })()}
                         
                         {inquiry.quotation.status === 'rejected' && (
                           <div className="text-sm text-gray-500 font-medium">

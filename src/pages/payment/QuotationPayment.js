@@ -14,6 +14,15 @@ const QuotationPayment = () => {
   const [showCustomPayment, setShowCustomPayment] = useState(false);
   const fetchingRef = useRef(false); // Prevent duplicate fetches
 
+  // Helper function to get valid quotation ID
+  const getQuotationId = () => {
+    const quotationId = quotation?._id || quotation?.id || id;
+    if (!quotationId || quotationId === 'undefined' || quotationId === 'null') {
+      return null;
+    }
+    return quotationId;
+  };
+
   useEffect(() => {
     if (id && !fetchingRef.current) {
       fetchingRef.current = true;
@@ -176,12 +185,18 @@ const QuotationPayment = () => {
     <div className="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
       <div className="px-4 py-6 sm:px-0">
         <div className="mb-6">
-          <Link
-            to={`/quotation/${quotation._id || quotation.id || id}`}
-            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-          >
-            ← Back to Quotation
-          </Link>
+          {(() => {
+            const quotationId = getQuotationId();
+            if (!quotationId) return null;
+            return (
+              <Link
+                to={`/quotation/${quotationId}`}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                ← Back to Quotation
+              </Link>
+            );
+          })()}
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

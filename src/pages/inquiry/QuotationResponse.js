@@ -1,35 +1,91 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { quotationAPI, inquiryAPI } from '../../services/api';
 import { axios } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 const QuotationResponse = () => {
-  const { id } = useParams();
+  const params = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [quotation, setQuotation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [acceptLoading, setAcceptLoading] = useState(false);
   const [rejectLoading, setRejectLoading] = useState(false);
+  const [showPdfViewer, setShowPdfViewer] = useState(false);
   const fetchingRef = useRef(false); // Prevent duplicate fetches
+
+  // Get ID from params, with fallback to extracting from URL path
+  const getId = () => {
+    let id = params.id;
+    
+    // If id is undefined, try to extract from URL path
+    if (!id || id === 'undefined' || id === 'null') {
+      const pathMatch = location.pathname.match(/\/quotation\/([^/]+)/);
+      if (pathMatch && pathMatch[1]) {
+        id = pathMatch[1];
+        console.log('Extracted ID from URL path:', id);
+      }
+    }
+    
+    return id;
+  };
+
+  const id = getId();
 
   useEffect(() => {
     // Wait for auth to load before fetching quotation
     // Only fetch when id changes or when auth finishes loading (not when user object changes)
-    if (!authLoading && id && !fetchingRef.current) {
-      fetchingRef.current = true;
-      fetchQuotation();
+    if (!authLoading) {
+      // Validate ID before attempting to fetch
+      if (!id || id === 'undefined' || id === 'null' || id.trim() === '') {
+        console.error('Invalid quotation ID:', {
+          paramsId: params.id,
+          extractedId: id,
+          pathname: location.pathname,
+          fullParams: params
+        });
+        toast.error('Invalid quotation ID. Redirecting...');
+        setLoading(false);
+        fetchingRef.current = false;
+        // Redirect to inquiries list after a short delay
+        setTimeout(() => {
+          navigate('/inquiries', { replace: true });
+        }, 1500);
+        return;
+      }
+      
+      if (!fetchingRef.current) {
+        fetchingRef.current = true;
+        fetchQuotation();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, authLoading]);
+  }, [params.id, location.pathname, authLoading]);
 
   const fetchQuotation = async () => {
     try {
+      // Get the current ID (in case it changed)
+      const currentId = getId();
+      
+      // Validate ID before making API call
+      if (!currentId || currentId === 'undefined' || currentId === 'null' || currentId.trim() === '') {
+        console.error('Invalid quotation ID in fetchQuotation:', {
+          id: currentId,
+          params: params,
+          pathname: location.pathname
+        });
+        toast.error('Invalid quotation ID. Please check the URL.');
+        setLoading(false);
+        fetchingRef.current = false;
+        return;
+      }
+      
       setLoading(true);
       fetchingRef.current = true;
-      const response = await quotationAPI.getQuotation(id);
+      const response = await quotationAPI.getQuotation(currentId);
       
       console.log('=== QUOTATION RESPONSE DEBUG ===');
       console.log('Full response:', response.data);
@@ -111,7 +167,12 @@ const QuotationResponse = () => {
       console.error('Error fetching quotation:', error);
       
       // Handle specific error cases
-      if (error.response?.status === 403) {
+      if (error.response?.status === 400) {
+        // Bad request - usually invalid ID
+        const errorMessage = error.response?.data?.message || 'Invalid quotation ID provided';
+        toast.error(errorMessage);
+        navigate('/inquiries');
+      } else if (error.response?.status === 403) {
         toast.error('Access denied. This quotation does not belong to you.');
         navigate('/inquiries');
       } else if (error.response?.status === 404) {
@@ -146,7 +207,13 @@ const QuotationResponse = () => {
     setAcceptLoading(true);
     
     try {
-      const response = await quotationAPI.respondToQuotation(id, {
+      const currentId = getId();
+      if (!currentId || currentId === 'undefined' || currentId === 'null') {
+        toast.error('Invalid quotation ID. Cannot accept quotation.');
+        return;
+      }
+      
+      const response = await quotationAPI.respondToQuotation(currentId, {
         response: 'accepted',
         notes: 'Quotation accepted by customer'
       });
@@ -157,7 +224,7 @@ const QuotationResponse = () => {
         toast.success('Quotation accepted successfully! Redirecting to payment...');
         // Navigate to payment page
         setTimeout(() => {
-          navigate(`/quotation/${id}/payment`);
+          navigate(`/quotation/${currentId}/payment`);
         }, 1500);
       } else {
         toast.error(response.data.message || 'Failed to accept quotation');
@@ -193,7 +260,13 @@ const QuotationResponse = () => {
     setRejectLoading(true);
     
     try {
-      const response = await quotationAPI.respondToQuotation(id, {
+      const currentId = getId();
+      if (!currentId || currentId === 'undefined' || currentId === 'null') {
+        toast.error('Invalid quotation ID. Cannot reject quotation.');
+        return;
+      }
+      
+      const response = await quotationAPI.respondToQuotation(currentId, {
         response: 'rejected',
         notes: 'Quotation rejected by customer'
       });
@@ -313,31 +386,8 @@ const QuotationResponse = () => {
                 {/* PDF Actions */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <button
-                    onClick={async () => {
-                      try {
-                        const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-                        const token = localStorage.getItem('token');
-                        const apiPdfUrl = `${apiBaseUrl}/quotation/${id}/pdf`;
-                        
-                        const response = await fetch(apiPdfUrl, {
-                          headers: {
-                            'Authorization': `Bearer ${token}`
-                          }
-                        });
-                        
-                        if (response.ok) {
-                          const blob = await response.blob();
-                          const url = window.URL.createObjectURL(blob);
-                          window.open(url, '_blank');
-                        } else {
-                          const errorData = await response.json().catch(() => ({}));
-                          console.error('PDF view error:', errorData);
-                          toast.error(errorData.message || 'Failed to view PDF. Please try downloading instead.');
-                        }
-                      } catch (error) {
-                        console.error('Error viewing PDF:', error);
-                        toast.error('Failed to view PDF. Please try downloading instead.');
-                      }
+                    onClick={() => {
+                      setShowPdfViewer(true);
                     }}
                     className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 shadow-lg hover:shadow-xl transition-all"
                   >
@@ -349,92 +399,68 @@ const QuotationResponse = () => {
                   </button>
                   
                   <button
-                    onClick={async () => {
-                      try {
-                        console.log('📄 ===== FRONTEND: PDF DOWNLOAD START =====');
-                        console.log('📋 Quotation Details:');
-                        console.log('   - Quotation ID:', quotation?._id || id);
-                        console.log('   - Quotation Number:', quotation?.quotationNumber);
+                    onClick={() => {
+                      // Get Cloudinary URL or fallback to API
+                      const cloudinaryUrl = quotation?.quotationPdfCloudinaryUrl || quotation?.quotationPdf;
+                      
+                      if (cloudinaryUrl && cloudinaryUrl.startsWith('http')) {
+                        // Use Cloudinary URL with download parameter
+                        const downloadUrl = cloudinaryUrl.includes('?') 
+                          ? `${cloudinaryUrl}&fl_attachment` 
+                          : `${cloudinaryUrl}?fl_attachment`;
+                        
+                        // Create a temporary link to trigger download
+                        const link = document.createElement('a');
+                        link.href = downloadUrl;
+                        link.download = quotation?.quotationPdfFilename || `quotation-${quotation?.quotationNumber || getId()}.pdf`;
+                        link.target = '_blank';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        toast.success('PDF download started');
+                      } else {
+                        // Fallback to API endpoint
+                        const currentId = getId();
+                        const quotationId = quotation?._id || currentId;
+                        if (!quotationId || quotationId === 'undefined' || quotationId === 'null') {
+                          toast.error('Invalid quotation ID. Cannot download PDF.');
+                          return;
+                        }
                         
                         const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
                         const token = localStorage.getItem('token');
-                        const quotationId = quotation?._id || id;
                         const apiPdfUrl = `${apiBaseUrl}/quotation/${quotationId}/pdf?download=true`;
                         
-                        console.log('🌐 Request URL:', apiPdfUrl);
+                        const link = document.createElement('a');
+                        link.href = apiPdfUrl;
+                        link.download = quotation?.quotationPdfFilename || `quotation-${quotation?.quotationNumber || quotationId}.pdf`;
+                        link.setAttribute('download', quotation?.quotationPdfFilename || `quotation-${quotation?.quotationNumber || quotationId}.pdf`);
                         
-                        const response = await fetch(apiPdfUrl, {
+                        // Add authorization header via fetch and create blob
+                        fetch(apiPdfUrl, {
                           headers: {
                             'Authorization': `Bearer ${token}`
                           }
-                        });
-                        
-                        console.log('📥 Response Status:', response.status);
-                        console.log('📥 Response Headers:', {
-                          'Content-Type': response.headers.get('Content-Type'),
-                          'Content-Length': response.headers.get('Content-Length')
-                        });
-                        
-                        if (response.ok) {
-                          const blob = await response.blob();
-                          
-                          console.log('📦 Blob Details:');
-                          console.log('   - Blob Size:', blob.size, 'bytes');
-                          console.log('   - Blob Type:', blob.type);
-                          
-                          // Validate blob
-                          if (blob.size === 0) {
-                            console.error('❌ Blob is empty!');
-                            toast.error('Downloaded PDF is empty. Please try again.');
-                            return;
+                        })
+                        .then(response => {
+                          if (response.ok) {
+                            return response.blob();
                           }
-                          
-                          if (blob.type !== 'application/pdf' && !blob.type.includes('pdf')) {
-                            console.warn('⚠️  Blob type is not PDF:', blob.type);
-                            const text = await blob.text();
-                            console.error('Response text:', text);
-                            try {
-                              const errorData = JSON.parse(text);
-                              toast.error(errorData.message || 'Failed to download PDF');
-                            } catch (e) {
-                              toast.error('Invalid PDF format received');
-                            }
-                            return;
-                          }
-                          
-                          // Validate PDF header
-                          const arrayBuffer = await blob.slice(0, 4).arrayBuffer();
-                          const uint8Array = new Uint8Array(arrayBuffer);
-                          const pdfHeader = String.fromCharCode(...uint8Array);
-                          console.log('📄 PDF Header:', pdfHeader);
-                          
-                          if (pdfHeader !== '%PDF') {
-                            console.error('❌ Invalid PDF header:', pdfHeader);
-                            toast.error('Downloaded file is not a valid PDF. Please try again.');
-                            return;
-                          }
-                          
-                          console.log('✅ PDF is valid, creating download...');
-                          
+                          throw new Error('Failed to download PDF');
+                        })
+                        .then(blob => {
                           const url = window.URL.createObjectURL(blob);
-                          const link = document.createElement('a');
                           link.href = url;
-                          link.download = quotation?.quotationPdf || `quotation-${quotation?.quotationNumber || quotationId}.pdf`;
                           document.body.appendChild(link);
                           link.click();
                           document.body.removeChild(link);
                           window.URL.revokeObjectURL(url);
-                          
-                          console.log('✅ PDF downloaded successfully');
                           toast.success('PDF downloaded successfully');
-                        } else {
-                          const errorData = await response.json().catch(() => ({}));
-                          console.error('❌ PDF download error:', errorData);
-                          toast.error(errorData.message || 'Failed to download PDF');
-                        }
-                      } catch (error) {
-                        console.error('❌ Error downloading PDF:', error);
-                        toast.error('Failed to download PDF: ' + error.message);
+                        })
+                        .catch(error => {
+                          console.error('Error downloading PDF:', error);
+                          toast.error('Failed to download PDF: ' + error.message);
+                        });
                       }
                     }}
                     className="inline-flex items-center justify-center px-6 py-3 border-2 border-gray-300 text-base font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 shadow hover:shadow-lg transition-all"
@@ -445,6 +471,82 @@ const QuotationResponse = () => {
                     Download PDF
                   </button>
                 </div>
+
+                {/* Cloudinary PDF Viewer Modal */}
+                {showPdfViewer && (
+                  <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                    <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                      {/* Background overlay */}
+                      <div 
+                        className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
+                        onClick={() => setShowPdfViewer(false)}
+                      ></div>
+
+                      {/* Center modal */}
+                      <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+                      {/* Modal panel */}
+                      <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-5xl sm:w-full">
+                        <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-medium text-gray-900">
+                              Quotation PDF - {quotation?.quotationNumber || 'Document'}
+                            </h3>
+                            <button
+                              onClick={() => setShowPdfViewer(false)}
+                              className="text-gray-400 hover:text-gray-500 focus:outline-none"
+                            >
+                              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                          <div className="mt-2" style={{ height: '80vh', width: '100%' }}>
+                            {(() => {
+                              const cloudinaryUrl = quotation?.quotationPdfCloudinaryUrl || quotation?.quotationPdf;
+                              
+                              if (cloudinaryUrl && cloudinaryUrl.startsWith('http')) {
+                                // Use Cloudinary iframe directly
+                                return (
+                                  <iframe
+                                    src={cloudinaryUrl}
+                                    className="w-full h-full border-0"
+                                    title="Quotation PDF Viewer"
+                                    style={{ minHeight: '600px' }}
+                                  />
+                                );
+                              } else {
+                                // Fallback to API endpoint with iframe
+                                const currentId = getId();
+                                const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+                                const token = localStorage.getItem('token');
+                                const apiPdfUrl = `${apiBaseUrl}/quotation/${currentId}/pdf`;
+                                
+                                return (
+                                  <iframe
+                                    src={`${apiPdfUrl}?token=${encodeURIComponent(token)}`}
+                                    className="w-full h-full border-0"
+                                    title="Quotation PDF Viewer"
+                                    style={{ minHeight: '600px' }}
+                                  />
+                                );
+                              }
+                            })()}
+                          </div>
+                        </div>
+                        <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                          <button
+                            type="button"
+                            onClick={() => setShowPdfViewer(false)}
+                            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* PDF Info */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

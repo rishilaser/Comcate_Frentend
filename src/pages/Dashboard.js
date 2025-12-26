@@ -45,6 +45,15 @@ const Dashboard = () => {
 
   const [stats, setStats] = useState(getRoleBasedStats());
 
+  // Helper function to get valid quotation ID
+  const getQuotationId = (quotation) => {
+    const id = quotation?._id || quotation?.id;
+    if (!id || id === 'undefined' || id === 'null') {
+      return null;
+    }
+    return id;
+  };
+
   // Update stats when data changes
   useEffect(() => {
     if (user?.role !== 'admin' && user?.role !== 'backoffice') {
@@ -495,14 +504,18 @@ const Dashboard = () => {
                                   ₹{quotation.totalAmount.toLocaleString()}
                                 </span>
                               )}
-                              {quotation.status === 'sent' && (
-                                <button
-                                  onClick={() => navigate(`/quotation/${quotation._id || quotation.id}/payment`)}
-                                  className="bg-orange-500 text-white px-3 py-1 rounded-md text-xs font-medium hover:bg-orange-600 transition-colors"
-                                >
-                                  Pay Now
-                                </button>
-                              )}
+                              {quotation.status === 'sent' && (() => {
+                                const quotationId = getQuotationId(quotation);
+                                if (!quotationId) return null;
+                                return (
+                                  <button
+                                    onClick={() => navigate(`/quotation/${quotationId}/payment`)}
+                                    className="bg-orange-500 text-white px-3 py-1 rounded-md text-xs font-medium hover:bg-orange-600 transition-colors"
+                                  >
+                                    Pay Now
+                                  </button>
+                                );
+                              })()}
                             </div>
                           </div>
                         ))}
@@ -614,23 +627,27 @@ const Dashboard = () => {
                             </div>
                           </div>
                           
-                          {quotation.status === 'sent' && (
-                            <div className="mt-4 flex space-x-3">
-                              <button
-                                onClick={() => navigate(`/quotation/${quotation._id || quotation.id}/payment`)}
-                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                              >
-                                <span className="mr-2">💳</span>
-                                Pay Now
-                              </button>
-                              <Link
-                                to={`/quotation/${quotation._id || quotation.id}`}
-                                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              >
-                                View Details
-                              </Link>
-                            </div>
-                          )}
+                          {quotation.status === 'sent' && (() => {
+                            const quotationId = getQuotationId(quotation);
+                            if (!quotationId) return null;
+                            return (
+                              <div className="mt-4 flex space-x-3">
+                                <button
+                                  onClick={() => navigate(`/quotation/${quotationId}/payment`)}
+                                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                >
+                                  <span className="mr-2">💳</span>
+                                  Pay Now
+                                </button>
+                                <Link
+                                  to={`/quotation/${quotationId}`}
+                                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                  View Details
+                                </Link>
+                              </div>
+                            );
+                          })()}
                         </div>
                       ))}
                     </div>
