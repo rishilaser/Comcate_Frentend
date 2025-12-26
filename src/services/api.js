@@ -7,7 +7,10 @@ export { axios };
 const getBaseURL = () => {
   const url = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
   // Remove trailing /api if present, then add it back to ensure single /api
-  const normalized = url.replace(/\/api\/?$/, '');
+  let normalized = url.replace(/\/api\/?$/, '');
+  // Remove trailing slash if present
+  normalized = normalized.replace(/\/$/, '');
+  // Add /api prefix
   return `${normalized}/api`;
 };
 
