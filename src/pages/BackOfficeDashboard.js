@@ -4,6 +4,7 @@ import BackOfficeMaterialManagement from './BackOfficeMaterialManagement';
 import QuotationForm from '../components/QuotationForm';
 import SubAdminManagement from '../components/SubAdminManagement';
 import AdminSidebar from '../components/AdminSidebar';
+import CloudinaryPDFViewer from '../components/CloudinaryPDFViewer';
 import { inquiryAPI, quotationAPI, adminAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -34,6 +35,8 @@ const BackOfficeDashboard = () => {
   const [showQuotationForm, setShowQuotationForm] = useState(false);
   const [selectedInquiry, setSelectedInquiry] = useState(null);
   const [lastFetchTime, setLastFetchTime] = useState(null);
+  const [showPDFViewer, setShowPDFViewer] = useState(false);
+  const [selectedQuotationPDF, setSelectedQuotationPDF] = useState(null);
 
   useEffect(() => {
     if (user) {
@@ -224,68 +227,21 @@ const BackOfficeDashboard = () => {
     }
   };
 
-  const handleDownloadPDF = async (quotation) => {
-    try {
-      const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-      const token = localStorage.getItem('token');
-      
-      // Always use API endpoint to avoid 401 errors with Cloudinary
-      // The backend will handle fetching from Cloudinary if needed
-      const apiPdfUrl = `${apiBaseUrl}/quotation/${quotation._id}/pdf?download=true`;
-      
-      const response = await fetch(apiPdfUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+  const handleDownloadPDF = (quotation) => {
+    // ✅ Use Cloudinary URL directly for iframe viewer
+    const cloudinaryUrl = quotation?.quotationPdfCloudinaryUrl || quotation?.quotationPdf;
+    
+    if (cloudinaryUrl && cloudinaryUrl.startsWith('http')) {
+      // Show Cloudinary iframe viewer
+      setSelectedQuotationPDF({
+        url: cloudinaryUrl,
+        filename: quotation?.quotationPdfFilename || `quotation_${quotation.quotationNumber || quotation._id}.pdf`
       });
-      
-      if (response.ok) {
-        const blob = await response.blob();
-        
-        if (blob.size === 0) {
-          toast.error('PDF is empty. Please try again.');
-          return;
-        }
-        
-        // Validate PDF header
-        const arrayBuffer = await blob.slice(0, 4).arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-        const pdfHeader = String.fromCharCode(...uint8Array);
-        
-        if (pdfHeader !== '%PDF') {
-          const text = await blob.text();
-          try {
-            const errorData = JSON.parse(text);
-            toast.error(errorData.message || 'Failed to download PDF');
-          } catch (e) {
-            toast.error('Invalid PDF format received');
-          }
-          return;
-        }
-        
-        // Create download link
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `quotation_${quotation.quotationNumber || quotation._id}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        
-        toast.success('PDF downloaded successfully!');
-      } else {
-        const errorText = await response.text();
-        try {
-          const errorData = JSON.parse(errorText);
-          toast.error(errorData.message || 'Failed to download PDF');
-        } catch (e) {
-          toast.error('Failed to download PDF');
-        }
-      }
-    } catch (error) {
-      console.error('Error downloading PDF:', error);
-      toast.error('Failed to download PDF. Please try again.');
+      setShowPDFViewer(true);
+    } else {
+      // Fallback: Try to fetch from API if Cloudinary URL not available
+      toast.error('PDF not available. Please ensure the quotation has a PDF uploaded.');
+      console.warn('No Cloudinary URL found for quotation:', quotation);
     }
   };
 
@@ -861,6 +817,18 @@ const BackOfficeDashboard = () => {
           inquiry={selectedInquiry}
           onClose={handleCloseQuotationForm}
           onSuccess={handleQuotationSuccess}
+        />
+      )}
+
+      {/* Cloudinary PDF Viewer Modal */}
+      {showPDFViewer && selectedQuotationPDF && (
+        <CloudinaryPDFViewer
+          cloudinaryUrl={selectedQuotationPDF.url}
+          filename={selectedQuotationPDF.filename}
+          onClose={() => {
+            setShowPDFViewer(false);
+            setSelectedQuotationPDF(null);
+          }}
         />
       )}
     </div>
