@@ -4,12 +4,14 @@ import toast from 'react-hot-toast';
 import { inquiryAPI, quotationAPI } from '../../services/api';
 import QuotationPreparationModal from '../../components/QuotationPreparationModal';
 import { useAuth } from '../../contexts/AuthContext';
+import { useQuotation } from '../../contexts/QuotationContext';
 import axios from 'axios';
 
 const InquiryDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { saveFromUploadResponse } = useQuotation();
   const [inquiry, setInquiry] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showQuotationModal, setShowQuotationModal] = useState(false);
@@ -384,6 +386,9 @@ const InquiryDetail = () => {
       console.log('📥 Quotation Number:', response.data?.quotation?.quotationNumber);
       
       if (response.data.success) {
+        // Save Cloudinary URL to context to prevent loss
+        saveFromUploadResponse(response);
+        
         toast.success('Quotation uploaded and sent successfully!');
         // Refresh inquiry data
         await fetchInquiry();

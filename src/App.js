@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
+import { QuotationProvider } from './contexts/QuotationContext';
 import ErrorBoundary from './components/ErrorBoundary';
 
 // Components - Keep frequently used ones as regular imports
@@ -111,7 +112,8 @@ function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <Router>
+          <QuotationProvider>
+            <Router>
             <div className="App">
               <Suspense fallback={<LoadingSpinner />}>
                 <Routes>
@@ -302,6 +304,7 @@ function App() {
               <Toaster position="top-right" />
             </div>
           </Router>
+          </QuotationProvider>
         </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>

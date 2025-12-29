@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { XMarkIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { quotationAPI, pdfAPI } from '../services/api';
+import { useQuotation } from '../contexts/QuotationContext';
 import toast from 'react-hot-toast';
 
 const QuotationForm = ({ inquiry, inquiries = [], onClose, onSuccess }) => {
+  const { saveFromUploadResponse } = useQuotation();
   const [loading, setLoading] = useState(false);
   const [parts, setParts] = useState([]);
   const [formData, setFormData] = useState({
@@ -406,6 +408,9 @@ const QuotationForm = ({ inquiry, inquiries = [], onClose, onSuccess }) => {
         console.log('📥 Quotation Number:', response.data?.quotation?.quotationNumber);
         
         if (response.data.success) {
+          // Save Cloudinary URL to context to prevent loss
+          saveFromUploadResponse(response);
+          
           toast.success('Quotation uploaded successfully!');
           onSuccess && onSuccess(response.data.quotation);
           onClose();
