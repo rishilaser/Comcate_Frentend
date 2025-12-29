@@ -28,10 +28,15 @@ const CloudinaryPDFViewer = ({ cloudinaryUrl, filename = 'quotation.pdf', onClos
     }
 
     try {
-      // Add fl_attachment parameter to force download
-      const downloadUrl = cloudinaryUrl.includes('?') 
-        ? `${cloudinaryUrl}&fl_attachment` 
-        : `${cloudinaryUrl}?fl_attachment`;
+      let downloadUrl = cloudinaryUrl;
+      
+      // For Cloudinary URLs, add fl_attachment parameter to force download
+      // For blob URLs, use them directly
+      if (cloudinaryUrl.startsWith('http') && !cloudinaryUrl.startsWith('blob:')) {
+        downloadUrl = cloudinaryUrl.includes('?') 
+          ? `${cloudinaryUrl}&fl_attachment` 
+          : `${cloudinaryUrl}?fl_attachment`;
+      }
       
       // Create a temporary link to trigger download
       const link = document.createElement('a');

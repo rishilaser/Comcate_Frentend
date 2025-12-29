@@ -227,7 +227,7 @@ const BackOfficeDashboard = () => {
     }
   };
 
-  const handleDownloadPDF = (quotation) => {
+  const handleDownloadPDF = async (quotation) => {
     // ✅ Use Cloudinary URL directly for iframe viewer
     const cloudinaryUrl = quotation?.quotationPdfCloudinaryUrl || quotation?.quotationPdf;
     
@@ -240,8 +240,29 @@ const BackOfficeDashboard = () => {
       setShowPDFViewer(true);
     } else {
       // Fallback: Try to fetch from API if Cloudinary URL not available
-      toast.error('PDF not available. Please ensure the quotation has a PDF uploaded.');
-      console.warn('No Cloudinary URL found for quotation:', quotation);
+      try {
+        toast.loading('Fetching PDF from server...', { id: 'pdf-loading' });
+        const response = await quotationAPI.getQuotationPDF(quotation._id);
+        
+        // Create blob URL from the PDF data
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const blobUrl = URL.createObjectURL(blob);
+        
+        // Show PDF viewer with blob URL
+        setSelectedQuotationPDF({
+          url: blobUrl,
+          filename: quotation?.quotationPdfFilename || `quotation_${quotation.quotationNumber || quotation._id}.pdf`
+        });
+        setShowPDFViewer(true);
+        
+        toast.success('PDF loaded successfully', { id: 'pdf-loading' });
+      } catch (error) {
+        console.error('Error fetching PDF:', error);
+        toast.error(
+          error.response?.data?.message || 'PDF not available. Please ensure the quotation has a PDF uploaded.',
+          { id: 'pdf-loading' }
+        );
+      }
     }
   };
 
@@ -826,6 +847,10 @@ const BackOfficeDashboard = () => {
           cloudinaryUrl={selectedQuotationPDF.url}
           filename={selectedQuotationPDF.filename}
           onClose={() => {
+            // Clean up blob URL if it's a blob URL to prevent memory leaks
+            if (selectedQuotationPDF.url && selectedQuotationPDF.url.startsWith('blob:')) {
+              URL.revokeObjectURL(selectedQuotationPDF.url);
+            }
             setShowPDFViewer(false);
             setSelectedQuotationPDF(null);
           }}
