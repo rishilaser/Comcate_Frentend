@@ -28,32 +28,20 @@ const CloudinaryPDFViewer = ({ cloudinaryUrl, filename = 'quotation.pdf', onClos
     }
 
     try {
-      // Check if it's a blob URL (starts with blob:)
-      if (cloudinaryUrl.startsWith('blob:')) {
-        // For blob URLs, create download link directly
-        const link = document.createElement('a');
-        link.href = cloudinaryUrl;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast.success('PDF download started');
-      } else {
-        // For Cloudinary URLs, add fl_attachment parameter to force download
-        const downloadUrl = cloudinaryUrl.includes('?') 
-          ? `${cloudinaryUrl}&fl_attachment` 
-          : `${cloudinaryUrl}?fl_attachment`;
-        
-        // Create a temporary link to trigger download
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = filename;
-        link.target = '_blank';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast.success('PDF download started');
-      }
+      // Add fl_attachment parameter to force download
+      const downloadUrl = cloudinaryUrl.includes('?') 
+        ? `${cloudinaryUrl}&fl_attachment` 
+        : `${cloudinaryUrl}?fl_attachment`;
+      
+      // Create a temporary link to trigger download
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success('PDF download started');
     } catch (error) {
       console.error('Download error:', error);
       toast.error('Failed to download PDF');
@@ -122,7 +110,7 @@ const CloudinaryPDFViewer = ({ cloudinaryUrl, filename = 'quotation.pdf', onClos
             <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading PDF...</p>
+                <p className="text-gray-600">Loading PDF from Cloudinary...</p>
               </div>
             </div>
           )}

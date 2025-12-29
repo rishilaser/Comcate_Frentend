@@ -227,7 +227,7 @@ const BackOfficeDashboard = () => {
     }
   };
 
-  const handleDownloadPDF = async (quotation) => {
+  const handleDownloadPDF = (quotation) => {
     // ✅ Use Cloudinary URL directly for iframe viewer
     const cloudinaryUrl = quotation?.quotationPdfCloudinaryUrl || quotation?.quotationPdf;
     
@@ -239,46 +239,9 @@ const BackOfficeDashboard = () => {
       });
       setShowPDFViewer(true);
     } else {
-      // Fallback: Fetch PDF from API endpoint
-      try {
-        const quotationId = quotation._id || quotation.id;
-        if (!quotationId) {
-          toast.error('Quotation ID not found');
-          return;
-        }
-
-        const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-        const token = localStorage.getItem('token');
-        const apiPdfUrl = `${apiBaseUrl}/quotation/${quotationId}/pdf`;
-        
-        toast.loading('Loading PDF...', { id: 'pdf-loading' });
-        
-        const response = await fetch(apiPdfUrl, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch PDF: ${response.status}`);
-        }
-        
-        const blob = await response.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-        
-        toast.success('PDF loaded successfully', { id: 'pdf-loading' });
-        
-        // Show PDF viewer with blob URL
-        setSelectedQuotationPDF({
-          url: blobUrl,
-          filename: quotation?.quotationPdfFilename || `quotation_${quotation.quotationNumber || quotation._id}.pdf`,
-          isBlob: true // Flag to indicate this is a blob URL that needs cleanup
-        });
-        setShowPDFViewer(true);
-      } catch (error) {
-        console.error('Error fetching PDF:', error);
-        toast.error('Failed to load PDF: ' + error.message, { id: 'pdf-loading' });
-      }
+      // Fallback: Try to fetch from API if Cloudinary URL not available
+      toast.error('PDF not available. Please ensure the quotation has a PDF uploaded.');
+      console.warn('No Cloudinary URL found for quotation:', quotation);
     }
   };
 
@@ -863,10 +826,6 @@ const BackOfficeDashboard = () => {
           cloudinaryUrl={selectedQuotationPDF.url}
           filename={selectedQuotationPDF.filename}
           onClose={() => {
-            // Clean up blob URL if it was created from API fetch
-            if (selectedQuotationPDF.isBlob && selectedQuotationPDF.url) {
-              window.URL.revokeObjectURL(selectedQuotationPDF.url);
-            }
             setShowPDFViewer(false);
             setSelectedQuotationPDF(null);
           }}

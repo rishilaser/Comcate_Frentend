@@ -15,8 +15,6 @@ const QuotationResponse = () => {
   const [acceptLoading, setAcceptLoading] = useState(false);
   const [rejectLoading, setRejectLoading] = useState(false);
   const [showPdfViewer, setShowPdfViewer] = useState(false);
-  const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
-  const [pdfLoading, setPdfLoading] = useState(false);
   const fetchingRef = useRef(false); // Prevent duplicate fetches
 
   // Get ID from params, with fallback to extracting from URL path
@@ -36,61 +34,6 @@ const QuotationResponse = () => {
   };
 
   const id = getId();
-
-  // Fetch PDF as blob when modal opens (for non-Cloudinary PDFs)
-  useEffect(() => {
-    if (showPdfViewer && quotation) {
-      const cloudinaryUrl = quotation?.quotationPdfCloudinaryUrl || quotation?.quotationPdf;
-      
-      // Only fetch if it's not a Cloudinary URL
-      if (!cloudinaryUrl || !cloudinaryUrl.startsWith('http')) {
-        const fetchPdfBlob = async () => {
-          try {
-            setPdfLoading(true);
-            const currentId = getId();
-            const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-            const token = localStorage.getItem('token');
-            const apiPdfUrl = `${apiBaseUrl}/quotation/${currentId}/pdf`;
-            
-            const response = await fetch(apiPdfUrl, {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
-            
-            if (!response.ok) {
-              throw new Error(`Failed to fetch PDF: ${response.status}`);
-            }
-            
-            const blob = await response.blob();
-            const blobUrl = window.URL.createObjectURL(blob);
-            setPdfBlobUrl(blobUrl);
-            setPdfLoading(false);
-          } catch (error) {
-            console.error('Error fetching PDF:', error);
-            toast.error('Failed to load PDF: ' + error.message);
-            setPdfLoading(false);
-          }
-        };
-        
-        fetchPdfBlob();
-      }
-    } else {
-      // Clean up blob URL when modal closes
-      if (pdfBlobUrl) {
-        window.URL.revokeObjectURL(pdfBlobUrl);
-        setPdfBlobUrl(null);
-      }
-    }
-    
-    // Cleanup on unmount
-    return () => {
-      if (pdfBlobUrl) {
-        window.URL.revokeObjectURL(pdfBlobUrl);
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPdfViewer, quotation]);
 
   useEffect(() => {
     // Wait for auth to load before fetching quotation
@@ -563,78 +506,29 @@ const QuotationResponse = () => {
                               const cloudinaryUrl = quotation?.quotationPdfCloudinaryUrl || quotation?.quotationPdf;
                               
                               if (cloudinaryUrl && cloudinaryUrl.startsWith('http')) {
-                                // Use Cloudinary iframe directly - Cloudinary allows iframe embedding
+                                // Use Cloudinary iframe directly
                                 return (
                                   <iframe
                                     src={cloudinaryUrl}
                                     className="w-full h-full border-0"
                                     title="Quotation PDF Viewer"
                                     style={{ minHeight: '600px' }}
-                                    allow="fullscreen"
                                   />
                                 );
-                              } else if (pdfBlobUrl) {
-                                // Use blob URL for API-fetched PDFs
+                              } else {
+                                // Fallback to API endpoint with iframe
+                                const currentId = getId();
+                                const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+                                const token = localStorage.getItem('token');
+                                const apiPdfUrl = `${apiBaseUrl}/quotation/${currentId}/pdf`;
+                                
                                 return (
                                   <iframe
-                                    src={pdfBlobUrl}
+                                    src={`${apiPdfUrl}?token=${encodeURIComponent(token)}`}
                                     className="w-full h-full border-0"
                                     title="Quotation PDF Viewer"
                                     style={{ minHeight: '600px' }}
-                                    allow="fullscreen"
                                   />
-                                );
-                              } else if (pdfLoading) {
-                                // Show loading state
-                                return (
-                                  <div className="flex items-center justify-center h-full">
-                                    <div className="text-center">
-                                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                                      <p className="text-gray-600">Loading PDF...</p>
-                                    </div>
-                                  </div>
-                                );
-                              } else {
-                                // Error state or no PDF
-                                return (
-                                  <div className="flex items-center justify-center h-full">
-                                    <div className="text-center">
-                                      <p className="text-red-600 mb-4">Failed to load PDF</p>
-                                      <button
-                                        onClick={() => {
-                                          const currentId = getId();
-                                          const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-                                          const token = localStorage.getItem('token');
-                                          const apiPdfUrl = `${apiBaseUrl}/quotation/${currentId}/pdf?download=true`;
-                                          
-                                          fetch(apiPdfUrl, {
-                                            headers: {
-                                              'Authorization': `Bearer ${token}`
-                                            }
-                                          })
-                                          .then(response => response.blob())
-                                          .then(blob => {
-                                            const url = window.URL.createObjectURL(blob);
-                                            const link = document.createElement('a');
-                                            link.href = url;
-                                            link.download = quotation?.quotationPdfFilename || `quotation-${quotation?.quotationNumber || currentId}.pdf`;
-                                            document.body.appendChild(link);
-                                            link.click();
-                                            document.body.removeChild(link);
-                                            window.URL.revokeObjectURL(url);
-                                            toast.success('PDF downloaded successfully');
-                                          })
-                                          .catch(error => {
-                                            console.error('Error downloading PDF:', error);
-                                            toast.error('Failed to download PDF');
-                                          });
-                                        }}
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                                      >
-                                        Download PDF Instead
-                                      </button>
-                                    </div>
-                                  </div>
                                 );
                               }
                             })()}
