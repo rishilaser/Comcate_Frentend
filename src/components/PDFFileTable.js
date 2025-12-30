@@ -19,19 +19,30 @@ const PDFFileTable = ({ files, onUpdateFile, onDeleteFile, materialData = [] }) 
       : ['Zintec', 'Mild Steel', 'Stainless Steel', 'Aluminum', 'Galvanized Steel'];
   }, [materialData]);
   
-  // Extract ALL unique thicknesses from database (not filtered by material)
-  const availableThicknesses = useMemo(() => {
-    return materialData.length > 0
-      ? [...new Set(materialData.map(m => m.thickness))].sort((a, b) => parseFloat(a) - parseFloat(b))
-      : ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0', '4.0', '5.0'];
-  }, [materialData]);
+  // Helper function to get thicknesses for a specific material
+  const getThicknessesForMaterial = (material) => {
+    if (!material || materialData.length === 0) {
+      return materialData.length > 0
+        ? [...new Set(materialData.map(m => m.thickness))].sort((a, b) => parseFloat(a) - parseFloat(b))
+        : ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0', '4.0', '5.0'];
+    }
+    return materialData
+      .filter(m => m.material === material)
+      .map(m => m.thickness)
+      .filter((thickness, index, self) => self.indexOf(thickness) === index)
+      .sort((a, b) => parseFloat(a) - parseFloat(b));
+  };
   
-  // Extract ALL unique grades from database (not filtered by material)
-  const availableGrades = useMemo(() => {
-    return materialData.length > 0
-      ? [...new Set(materialData.map(m => m.grade).filter(g => g && g.trim() !== ''))]
-      : ['A', 'B', 'C', 'D'];
-  }, [materialData]);
+  // Helper function to get grades for a specific material and thickness combination
+  const getGradesForMaterialAndThickness = (material, thickness) => {
+    if (!material || !thickness || materialData.length === 0) {
+      return [];
+    }
+    return materialData
+      .filter(m => m.material === material && m.thickness === thickness && m.grade && m.grade.trim() !== '')
+      .map(m => m.grade)
+      .filter((grade, index, self) => self.indexOf(grade) === index);
+  };
 
   const handleEdit = (fileId, file) => {
     setEditingId(fileId);
@@ -78,10 +89,24 @@ const PDFFileTable = ({ files, onUpdateFile, onDeleteFile, materialData = [] }) 
     // Ensure proper character encoding for text fields
     const processedValue = typeof value === 'string' ? value.trim() : value;
     
-    setEditingValues(prev => ({
-      ...prev,
-      [field]: processedValue
-    }));
+    setEditingValues(prev => {
+      const updated = {
+        ...prev,
+        [field]: processedValue
+      };
+      
+      // When material changes, reset thickness and grade
+      if (field === 'material') {
+        updated.thickness = '';
+        updated.grade = '';
+      }
+      // When thickness changes, reset grade
+      else if (field === 'thickness') {
+        updated.grade = '';
+      }
+      
+      return updated;
+    });
   };
 
   const formatDate = (date) => {
@@ -227,6 +252,12 @@ const PDFFileTable = ({ files, onUpdateFile, onDeleteFile, materialData = [] }) 
               const fileId = file.id || index;
               const isEditing = editingId === fileId;
               
+              // Get filtered options based on current selections
+              const selectedMaterial = isEditing ? editingValues.material : file.material;
+              const selectedThickness = isEditing ? editingValues.thickness : file.thickness;
+              const filteredThicknesses = getThicknessesForMaterial(selectedMaterial);
+              const filteredGrades = getGradesForMaterialAndThickness(selectedMaterial, selectedThickness);
+              
               return (
                 <tr key={fileId} className="hover:bg-gray-50">
                   {/* Part Ref */}
@@ -261,6 +292,7 @@ const PDFFileTable = ({ files, onUpdateFile, onDeleteFile, materialData = [] }) 
                         className="w-full px-2 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm custom-select-scroll scrollable-dropdown"
                         size="1"
                       >
+                        <option value="">Select Material</option>
                         {availableMaterials.map((material) => (
                           <option key={material} value={material}>{material}</option>
                         ))}
@@ -278,8 +310,9 @@ const PDFFileTable = ({ files, onUpdateFile, onDeleteFile, materialData = [] }) 
                         onChange={(e) => handleInputChange('thickness', e.target.value)}
                         className="w-full px-2 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm custom-select-scroll scrollable-dropdown"
                         size="1"
+                        disabled={!selectedMaterial}
                       >
-                        {availableThicknesses.map((thickness) => (
+                        {filteredThicknesses.map((thickness) => (
                           <option key={thickness} value={thickness}>{thickness}mm</option>
                         ))}
                       </select>
@@ -296,9 +329,9 @@ const PDFFileTable = ({ files, onUpdateFile, onDeleteFile, materialData = [] }) 
                         onChange={(e) => handleInputChange('grade', e.target.value)}
                         className="w-full px-2 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm custom-select-scroll scrollable-dropdown"
                         size="1"
+                        disabled={!selectedMaterial || !selectedThickness}
                       >
-                        <option value="">Select Grade</option>
-                        {availableGrades.map((grade) => (
+                        {filteredGrades.map((grade) => (
                           <option key={grade} value={grade}>{grade}</option>
                         ))}
                       </select>

@@ -681,7 +681,23 @@ const Dashboard = () => {
                       <span className="ml-2 text-gray-600">Loading inquiries...</span>
                     </div>
                   ) : inquiries.length > 0 ? (
-                    <div className="space-y-4">
+                    <div 
+                      className="space-y-4 overflow-y-auto inquiries-scroll-container"
+                      style={{ 
+                        maxHeight: '650px',
+                        scrollbarWidth: 'none', /* Firefox */
+                        msOverflowStyle: 'none' /* IE and Edge */
+                      }}
+                    >
+                      <style>{`
+                        .inquiries-scroll-container::-webkit-scrollbar {
+                          display: none; /* Chrome, Safari, Opera */
+                        }
+                        .inquiries-scroll-container {
+                          -ms-overflow-style: none; /* IE and Edge */
+                          scrollbar-width: none; /* Firefox */
+                        }
+                      `}</style>
                       {inquiries.map((inquiry) => (
                         <div key={inquiry._id || inquiry.id || `inquiry-${inquiry.inquiryNumber || Math.random()}`} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                           <div className="flex items-center justify-between">

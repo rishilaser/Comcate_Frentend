@@ -462,12 +462,60 @@ const InquiryDetail = () => {
     }
   };
 
+  // Helper function to get thicknesses for a specific material
+  const getThicknessesForMaterial = (material) => {
+    if (!material || materialData.length === 0) {
+      return materialData.length > 0
+        ? [...new Set(materialData.map(m => m.thickness))].sort((a, b) => parseFloat(a) - parseFloat(b))
+        : ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0', '4.0', '5.0'];
+    }
+    return materialData
+      .filter(m => m.material === material)
+      .map(m => m.thickness)
+      .filter((thickness, index, self) => self.indexOf(thickness) === index)
+      .sort((a, b) => parseFloat(a) - parseFloat(b));
+  };
+  
+  // Helper function to get grades for a specific material and thickness combination
+  const getGradesForMaterialAndThickness = (material, thickness) => {
+    if (!material || !thickness || materialData.length === 0) {
+      return [];
+    }
+    return materialData
+      .filter(m => m.material === material && m.thickness === thickness && m.grade && m.grade.trim() !== '')
+      .map(m => m.grade)
+      .filter((grade, index, self) => self.indexOf(grade) === index);
+  };
+
   const handlePartFieldChange = (index, field, value) => {
     const updatedParts = [...editingParts];
-    updatedParts[index] = {
-      ...updatedParts[index],
-      [field]: value
-    };
+    const currentPart = updatedParts[index];
+    
+    // When material changes, reset thickness and grade
+    if (field === 'material') {
+      updatedParts[index] = {
+        ...currentPart,
+        [field]: value,
+        thickness: '',
+        grade: ''
+      };
+    }
+    // When thickness changes, reset grade
+    else if (field === 'thickness') {
+      updatedParts[index] = {
+        ...currentPart,
+        [field]: value,
+        grade: ''
+      };
+    }
+    // For other fields, just update the field
+    else {
+      updatedParts[index] = {
+        ...currentPart,
+        [field]: value
+      };
+    }
+    
     setEditingParts(updatedParts);
   };
 
@@ -908,13 +956,12 @@ const InquiryDetail = () => {
                       const availableMaterials = materialData.length > 0 
                         ? [...new Set(materialData.map(m => m.material))]
                         : ['Zintec', 'Mild Steel', 'Stainless Steel', 'Aluminum'];
-                      const availableThicknesses = materialData.length > 0
-                        ? [...new Set(materialData.map(m => m.thickness))].sort((a, b) => parseFloat(a) - parseFloat(b))
-                        : ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0', '4.0', '5.0'];
-                      // eslint-disable-next-line no-unused-vars
-                      const availableGrades = materialData.length > 0
-                        ? [...new Set(materialData.map(m => m.grade).filter(g => g && g.trim() !== ''))]
-                        : [];
+                      
+                      // Get filtered options based on current selections
+                      const selectedMaterial = spec.material;
+                      const selectedThickness = spec.thickness;
+                      const filteredThicknesses = getThicknessesForMaterial(selectedMaterial);
+                      const filteredGrades = getGradesForMaterialAndThickness(selectedMaterial, selectedThickness);
                       
                       return (
                         <tr key={index} className="hover:bg-gray-50">
@@ -956,21 +1003,24 @@ const InquiryDetail = () => {
                               onChange={(e) => handlePartFieldChange(index, 'thickness', e.target.value)}
                               className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
                               required
+                              disabled={!selectedMaterial}
                             >
-                              <option value="">Select Thickness</option>
-                              {availableThicknesses.map(thick => (
+                              {filteredThicknesses.map(thick => (
                                 <option key={thick} value={thick}>{thick} mm</option>
                               ))}
                             </select>
                           </td>
                           <td className="px-4 py-4">
-                            <input
-                              type="text"
+                            <select
                               value={spec.grade || ''}
                               onChange={(e) => handlePartFieldChange(index, 'grade', e.target.value)}
                               className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
-                              placeholder="Grade (optional)"
-                            />
+                              disabled={!selectedMaterial || !selectedThickness}
+                            >
+                              {filteredGrades.map(grade => (
+                                <option key={grade} value={grade}>{grade}</option>
+                              ))}
+                            </select>
                           </td>
                           <td className="px-4 py-4">
                             <input
@@ -1058,7 +1108,23 @@ const InquiryDetail = () => {
                     </button>
                   )}
                 </div>
-                <div className="space-y-3">
+                <div 
+                  className="space-y-3 overflow-y-auto files-scroll-container"
+                  style={{ 
+                    maxHeight: '400px',
+                    scrollbarWidth: 'none', /* Firefox */
+                    msOverflowStyle: 'none' /* IE and Edge */
+                  }}
+                >
+                  <style>{`
+                    .files-scroll-container::-webkit-scrollbar {
+                      display: none; /* Chrome, Safari, Opera */
+                    }
+                    .files-scroll-container {
+                      -ms-overflow-style: none; /* IE and Edge */
+                      scrollbar-width: none; /* Firefox */
+                    }
+                  `}</style>
                   {inquiry.files && inquiry.files.length > 0 ? (
                     inquiry.files.map((file, index) => (
                       <div key={index} className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">

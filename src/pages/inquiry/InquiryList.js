@@ -258,12 +258,22 @@ const InquiryList = () => {
 
           {/* Modern Inquiry List */}
           <div 
-            className="space-y-4 max-h-[600px] overflow-y-auto pr-2"
-            style={{
-              scrollbarWidth: 'thin',
-              scrollbarColor: '#cbd5e1 #f1f5f9'
+            className="space-y-4 overflow-y-auto inquiries-list-scroll-container"
+            style={{ 
+              maxHeight: '650px',
+              scrollbarWidth: 'none', /* Firefox */
+              msOverflowStyle: 'none' /* IE and Edge */
             }}
           >
+            <style>{`
+              .inquiries-list-scroll-container::-webkit-scrollbar {
+                display: none; /* Chrome, Safari, Opera */
+              }
+              .inquiries-list-scroll-container {
+                -ms-overflow-style: none; /* IE and Edge */
+                scrollbar-width: none; /* Firefox */
+              }
+            `}</style>
             {filteredInquiries.map((inquiry) => (
               <div 
                 key={inquiry.id} 
