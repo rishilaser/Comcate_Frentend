@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { orderAPI, adminAPI, quotationAPI, inquiryAPI } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,6 +9,7 @@ const OrderDetail = () => {
   const { user } = useAuth();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const fetchingRef = useRef(false); // Prevent duplicate fetches
   
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [showDispatchModal, setShowDispatchModal] = useState(false);
@@ -20,9 +21,11 @@ const OrderDetail = () => {
   });
 
   useEffect(() => {
-    if (user?._id) {
+    if (user?._id && !fetchingRef.current) {
+      fetchingRef.current = true;
       fetchOrder();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user?._id]);
 
   const fetchOrder = async () => {
@@ -153,10 +156,37 @@ const OrderDetail = () => {
         toast.error('Order not found');
       }
     } catch (error) {
-      console.error('❌ FRONTEND: Error fetching order:', error);
-      toast.error('Failed to fetch order details');
+      // Ignore cancellation errors - they're expected when requests are cancelled
+      if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
+        // Silently return - this is expected behavior when a new request cancels the old one
+        return;
+      }
+      
+      // Only log real errors (not cancellations)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ FRONTEND: Error fetching order:', error);
+      }
+      
+      // Handle specific error cases
+      if (error.response?.status === 400) {
+        toast.error('Invalid order ID provided');
+      } else if (error.response?.status === 403) {
+        toast.error('Access denied. This order does not belong to you.');
+      } else if (error.response?.status === 404) {
+        toast.error('Order not found.');
+      } else if (error.response?.status === 401) {
+        // 401 is handled by axios interceptor - will logout automatically
+        toast.error('Authentication failed. Please login again.');
+      } else if (error.response?.status === 500) {
+        toast.error('Server error. Please try again later.');
+      } else if (error.code === 'ERR_NETWORK') {
+        toast.error('Network error. Please check your connection.');
+      } else {
+        toast.error('Failed to fetch order details');
+      }
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
 

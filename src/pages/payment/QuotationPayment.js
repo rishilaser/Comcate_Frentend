@@ -31,6 +31,32 @@ const QuotationPayment = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Auto-refresh when page becomes visible (user switches back to tab/window)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && id && !showCustomPayment) {
+        fetchingRef.current = false; // Reset ref to allow refresh
+        fetchQuotation();
+      }
+    };
+
+    const handleFocus = () => {
+      if (id && !showCustomPayment) {
+        fetchingRef.current = false; // Reset ref to allow refresh
+        fetchQuotation();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, showCustomPayment]);
+
   const fetchQuotation = async () => {
     try {
       setLoading(true);
@@ -104,6 +130,11 @@ const QuotationPayment = () => {
         
         if (response.data.success) {
           toast.success('Dummy payment successful! Order created.');
+          
+          // Trigger refresh events for Dashboard and other pages
+          window.dispatchEvent(new CustomEvent('orderCreated'));
+          window.dispatchEvent(new CustomEvent('dataRefresh', { detail: { type: 'order' } }));
+          
           navigate(`/order/${response.data.order.id}`);
         } else {
           toast.error(response.data.message || 'Failed to create order');
@@ -129,6 +160,11 @@ const QuotationPayment = () => {
           const orderId = response.data.order.id || response.data.order._id;
           console.log('Navigating to order:', orderId);
           toast.success('Order created successfully! Payment will be collected on delivery.');
+          
+          // Trigger refresh events for Dashboard and other pages
+          window.dispatchEvent(new CustomEvent('orderCreated'));
+          window.dispatchEvent(new CustomEvent('dataRefresh', { detail: { type: 'order' } }));
+          
           navigate(`/order/${orderId}`);
         } else {
           toast.error(response.data.message || 'Failed to create order');
@@ -359,6 +395,11 @@ const QuotationPayment = () => {
               const orderId = response.data.order.id || response.data.order._id;
               console.log('Navigating to order:', orderId);
               toast.success('Order created successfully! Payment details sent to your registered number.');
+              
+              // Trigger refresh events for Dashboard and other pages
+              window.dispatchEvent(new CustomEvent('orderCreated'));
+              window.dispatchEvent(new CustomEvent('dataRefresh', { detail: { type: 'order' } }));
+              
               navigate(`/order/${orderId}`);
             } else {
               toast.error(response.data.message || 'Failed to create order');

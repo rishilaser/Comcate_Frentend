@@ -34,7 +34,28 @@ const QuotationForm = ({ inquiry, inquiries = [], onClose, onSuccess }) => {
 
   // Helper function to safely extract customer data
   const getCustomerData = () => {
-    if (!inquiry || !inquiry.customerData) {
+    // Use currentInquiry if available, otherwise use inquiry
+    const inquiryToUse = currentInquiry || inquiry;
+    
+    if (!inquiryToUse) {
+      return {
+        firstName: 'N/A',
+        lastName: '',
+        companyName: 'N/A',
+        email: 'N/A'
+      };
+    }
+    
+    // Check for customerData first (from transformed inquiry)
+    let customer = inquiryToUse.customerData;
+    
+    // If customerData doesn't exist, check for customer (from populated inquiry)
+    if (!customer && inquiryToUse.customer) {
+      customer = inquiryToUse.customer;
+    }
+    
+    // If still no customer data, return defaults
+    if (!customer) {
       return {
         firstName: 'N/A',
         lastName: '',
@@ -44,12 +65,12 @@ const QuotationForm = ({ inquiry, inquiries = [], onClose, onSuccess }) => {
     }
     
     // Handle both object and string cases
-    if (typeof inquiry.customerData === 'object') {
+    if (typeof customer === 'object') {
       return {
-        firstName: inquiry.customerData.firstName || 'N/A',
-        lastName: inquiry.customerData.lastName || '',
-        companyName: inquiry.customerData.companyName || 'N/A',
-        email: inquiry.customerData.email || 'N/A'
+        firstName: customer.firstName || 'N/A',
+        lastName: customer.lastName || '',
+        companyName: customer.companyName || 'N/A',
+        email: customer.email || 'N/A'
       };
     }
     

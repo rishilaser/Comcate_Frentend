@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import axios from 'axios';
@@ -25,6 +25,13 @@ const BackOfficeMaterialManagement = () => {
     grade: '',
     status: 'Active'
   });
+  const [materialSuggestions, setMaterialSuggestions] = useState([]);
+  const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
+  const [materialInputFocused, setMaterialInputFocused] = useState(false);
+  const materialDropdownRef = useRef(null);
+  const [editMaterialSuggestions, setEditMaterialSuggestions] = useState([]);
+  const [showEditMaterialDropdown, setShowEditMaterialDropdown] = useState(false);
+  const editMaterialDropdownRef = useRef(null);
   const { user } = useAuth();
 
   // Generate realistic material data for admin dashboard
@@ -102,6 +109,30 @@ const BackOfficeMaterialManagement = () => {
   useEffect(() => {
     loadMaterialData();
   }, []);
+
+  // Auto-refresh when page becomes visible (user switches back to tab/window)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && !showAddModal && !editingRow) {
+        loadMaterialData();
+      }
+    };
+
+    const handleFocus = () => {
+      if (!showAddModal && !editingRow) {
+        loadMaterialData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAddModal, editingRow]);
 
   const loadMaterialData = async () => {
     try {
@@ -221,6 +252,8 @@ const BackOfficeMaterialManagement = () => {
       pricePerKg: row.pricePerKg,
       status: row.status
     });
+    setEditMaterialSuggestions([]);
+    setShowEditMaterialDropdown(false);
   };
 
   const handleSave = async (id) => {
@@ -252,6 +285,13 @@ const BackOfficeMaterialManagement = () => {
       
       // Reload to sync with database
       await loadMaterialData();
+      
+      // Notify other tabs/pages to refresh material data
+      localStorage.setItem('materialDataUpdated', Date.now().toString());
+      localStorage.removeItem('materialDataUpdated');
+      
+      // Dispatch custom event for same-tab updates
+      window.dispatchEvent(new CustomEvent('materialDataUpdated'));
     } catch (error) {
       console.error('❌ Error saving material:', error);
       toast.error('Failed to save changes: ' + (error.response?.data?.message || error.message));
@@ -263,6 +303,8 @@ const BackOfficeMaterialManagement = () => {
   const handleCancel = (id) => {
     setEditingRow(null);
     setEditData({});
+    setEditMaterialSuggestions([]);
+    setShowEditMaterialDropdown(false);
     setMaterialData(prevData => 
       prevData.map(item => 
         item.id === id 
@@ -288,6 +330,10 @@ const BackOfficeMaterialManagement = () => {
         
         // Reload to sync with database
         await loadMaterialData();
+        
+        // Notify other tabs/pages to refresh material data
+        localStorage.setItem('materialDataUpdated', Date.now().toString());
+        localStorage.removeItem('materialDataUpdated');
       } catch (error) {
         console.error('❌ Error deleting material:', error);
         toast.error('Failed to delete: ' + (error.response?.data?.message || error.message));
@@ -305,6 +351,72 @@ const BackOfficeMaterialManagement = () => {
       grade: '',
       status: 'Active'
     });
+    setMaterialSuggestions([]);
+    setShowMaterialDropdown(false);
+  };
+
+  // Search materials as user types
+  const handleMaterialInputChange = (value) => {
+    setNewMaterial({...newMaterial, material: value});
+    
+    if (value.trim().length > 0) {
+      // Search for matching materials in the database
+      const searchTerm = value.toLowerCase().trim();
+      const matches = materialData
+        .filter(item => 
+          item.material && 
+          item.material.toLowerCase().includes(searchTerm)
+        )
+        .map(item => item.material)
+        .filter((value, index, self) => self.indexOf(value) === index) // Remove duplicates
+        .slice(0, 10); // Limit to 10 suggestions
+      
+      setMaterialSuggestions(matches);
+      setShowMaterialDropdown(matches.length > 0);
+    } else {
+      setMaterialSuggestions([]);
+      setShowMaterialDropdown(false);
+    }
+  };
+
+  // Handle material selection from dropdown
+  const handleMaterialSelect = (selectedMaterial) => {
+    setNewMaterial({...newMaterial, material: selectedMaterial});
+    setMaterialSuggestions([]);
+    setShowMaterialDropdown(false);
+    setMaterialInputFocused(false);
+  };
+
+  // Search materials for edit mode as user types
+  const handleEditMaterialInputChange = (value) => {
+    setEditData({...editData, material: value});
+    
+    if (value.trim().length > 0) {
+      // Search for matching materials in the database (exclude current editing row)
+      const searchTerm = value.toLowerCase().trim();
+      const matches = materialData
+        .filter(item => 
+          item.id !== editingRow && // Exclude current row being edited
+          item.material && 
+          item.material.toLowerCase().includes(searchTerm)
+        )
+        .map(item => item.material)
+        .filter((value, index, self) => self.indexOf(value) === index) // Remove duplicates
+        .slice(0, 10); // Limit to 10 suggestions
+      
+      setEditMaterialSuggestions(matches);
+      setShowEditMaterialDropdown(matches.length > 0);
+    } else {
+      setEditMaterialSuggestions([]);
+      setShowEditMaterialDropdown(false);
+    }
+  };
+
+  // Handle material selection from edit dropdown
+  const handleEditMaterialSelect = (selectedMaterial) => {
+    setEditData({...editData, material: selectedMaterial});
+    setEditMaterialSuggestions([]);
+    setShowEditMaterialDropdown(false);
   };
 
   const handleAddMaterial = async () => {
@@ -344,11 +456,20 @@ const BackOfficeMaterialManagement = () => {
         grade: '',
         status: 'Active'
       });
+      setMaterialSuggestions([]);
+      setShowMaterialDropdown(false);
       
       toast.success('✅ Material added successfully!');
       
       // Reload to sync with database
       await loadMaterialData();
+      
+      // Notify other tabs/pages to refresh material data
+      localStorage.setItem('materialDataUpdated', Date.now().toString());
+      localStorage.removeItem('materialDataUpdated');
+      
+      // Dispatch custom event for same-tab updates
+      window.dispatchEvent(new CustomEvent('materialDataUpdated'));
     } catch (error) {
       console.error('❌ Error adding material:', error);
       toast.error('Failed to add material: ' + (error.response?.data?.message || error.message));
@@ -365,6 +486,8 @@ const BackOfficeMaterialManagement = () => {
       grade: '',
       status: 'Active'
     });
+    setMaterialSuggestions([]);
+    setShowMaterialDropdown(false);
   };
 
 
@@ -501,13 +624,54 @@ const BackOfficeMaterialManagement = () => {
                         <div className="flex items-center">
                           <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
                           {editingRow === item.id ? (
-                            <input
-                              type="text"
-                              value={editData.material}
-                              onChange={(e) => setEditData({...editData, material: e.target.value})}
-                              className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              placeholder="Enter material"
-                            />
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={editData.material}
+                                onChange={(e) => handleEditMaterialInputChange(e.target.value)}
+                                onFocus={() => {
+                                  if (editData.material && editData.material.trim().length > 0 && editMaterialSuggestions.length > 0) {
+                                    setShowEditMaterialDropdown(true);
+                                  }
+                                }}
+                                onBlur={() => {
+                                  setTimeout(() => {
+                                    setShowEditMaterialDropdown(false);
+                                  }, 200);
+                                }}
+                                className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="Enter material"
+                              />
+                              {/* Edit Material Suggestions Dropdown */}
+                              {showEditMaterialDropdown && editMaterialSuggestions.length > 0 && (
+                                <div 
+                                  ref={editMaterialDropdownRef}
+                                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+                                  onMouseDown={(e) => {
+                                    // Prevent input blur when clicking on dropdown
+                                    e.preventDefault();
+                                  }}
+                                >
+                                  {editMaterialSuggestions.map((suggestion, index) => (
+                                    <div
+                                      key={index}
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        handleEditMaterialSelect(suggestion);
+                                      }}
+                                      className="px-4 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors"
+                                    >
+                                      <div className="flex items-center">
+                                        <svg className="w-4 h-4 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                        </svg>
+                                        <span className="text-sm text-gray-700">{suggestion}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           ) : (
                             item.material
                           )}
@@ -637,16 +801,59 @@ const BackOfficeMaterialManagement = () => {
               </div>
               
               <div className="space-y-4">
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Material *</label>
                   <input
                     type="text"
                     value={newMaterial.material}
-                    onChange={(e) => setNewMaterial({...newMaterial, material: e.target.value})}
+                    onChange={(e) => handleMaterialInputChange(e.target.value)}
+                    onFocus={() => {
+                      setMaterialInputFocused(true);
+                      if (newMaterial.material.trim().length > 0 && materialSuggestions.length > 0) {
+                        setShowMaterialDropdown(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      // Delay hiding dropdown to allow click on suggestion
+                      // The onMouseDown on dropdown items will prevent this from firing
+                      setTimeout(() => {
+                        setShowMaterialDropdown(false);
+                        setMaterialInputFocused(false);
+                      }, 200);
+                    }}
                     placeholder="Enter material name"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
+                  {/* Material Suggestions Dropdown */}
+                  {showMaterialDropdown && materialSuggestions.length > 0 && (
+                    <div 
+                      ref={materialDropdownRef}
+                      className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+                      onMouseDown={(e) => {
+                        // Prevent input blur when clicking on dropdown
+                        e.preventDefault();
+                      }}
+                    >
+                      {materialSuggestions.map((suggestion, index) => (
+                        <div
+                          key={index}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleMaterialSelect(suggestion);
+                          }}
+                          className="px-4 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            <svg className="w-4 h-4 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                            <span className="text-sm text-gray-700">{suggestion}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 
                 <div>

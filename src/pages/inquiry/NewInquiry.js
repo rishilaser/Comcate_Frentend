@@ -75,6 +75,59 @@ const NewInquiry = () => {
     fetchMaterialData();
   }, [fetchMaterialData]);
 
+  // Auto-refresh material data when page becomes visible (user switches back to tab/window)
+  useEffect(() => {
+    let timeoutId;
+    let isRefreshing = false;
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden && !isRefreshing) {
+        isRefreshing = true;
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          fetchMaterialData();
+          isRefreshing = false;
+        }, 500);
+      }
+    };
+
+    const handleFocus = () => {
+      if (!isRefreshing) {
+        isRefreshing = true;
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          fetchMaterialData();
+          isRefreshing = false;
+        }, 500);
+      }
+    };
+
+    // Listen for storage events (when material data is updated in another tab)
+    const handleStorageChange = (e) => {
+      if (e.key === 'materialDataUpdated') {
+        fetchMaterialData();
+      }
+    };
+
+    // Listen for custom events (when material data is updated in same tab)
+    const handleMaterialDataUpdate = () => {
+      fetchMaterialData();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('materialDataUpdated', handleMaterialDataUpdate);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('materialDataUpdated', handleMaterialDataUpdate);
+    };
+  }, [fetchMaterialData]);
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -325,6 +378,11 @@ const NewInquiry = () => {
       const response = handleApiSuccess(result);
       
       toast.success(response.message || 'Inquiry submitted successfully!');
+      
+      // Trigger refresh event for InquiryList and Dashboard
+      window.dispatchEvent(new CustomEvent('inquiryCreated'));
+      window.dispatchEvent(new CustomEvent('dataRefresh', { detail: { type: 'inquiry' } }));
+      
       // Use replace for faster redirect (no history entry)
       navigate('/inquiries', { replace: true });
     } catch (error) {

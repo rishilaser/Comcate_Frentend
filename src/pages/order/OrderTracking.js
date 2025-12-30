@@ -18,6 +18,30 @@ const OrderTracking = () => {
     }
   }, [id, user?._id]);
 
+  // Auto-refresh when page becomes visible (user switches back to tab/window)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && id && user?._id) {
+        fetchOrder();
+      }
+    };
+
+    const handleFocus = () => {
+      if (id && user?._id) {
+        fetchOrder();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, user?._id]);
+
   // Update order with real-time data
   useEffect(() => {
     if (realTimeOrderData && order) {

@@ -67,12 +67,29 @@ const InquiryList = () => {
             hour12: true
           });
           
+          // Debug customer data
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Inquiry customer data:', {
+              inquiryNumber: inquiry.inquiryNumber,
+              customer: inquiry.customer,
+              hasCustomer: !!inquiry.customer,
+              customerType: typeof inquiry.customer
+            });
+          }
+          
+          // Extract customer information with better fallback
+          const customer = inquiry.customer || {};
+          const companyName = customer.companyName || customer.company || 'N/A';
+          const firstName = customer.firstName || '';
+          const lastName = customer.lastName || '';
+          const contactName = `${firstName} ${lastName}`.trim() || 'N/A';
+          
           return {
             id: inquiry.inquiryNumber,
             shortId: inquiry.inquiryNumber.replace('INQ', '').slice(-4),
             status: inquiry.status,
-            company: inquiry.customer?.companyName || 'N/A',
-            contact: `${inquiry.customer?.firstName || ''} ${inquiry.customer?.lastName || ''}`.trim() || 'N/A',
+            company: companyName,
+            contact: contactName,
             files: inquiry.files?.length || 0,
             parts: inquiry.parts?.length || 0,
             createdAt: `${dateStr} at ${timeStr}`,

@@ -112,6 +112,11 @@ const Profile = () => {
       
       if (result.success) {
         toast.success('Profile updated successfully!');
+        // Refresh profile data after update
+        if (user?.role === 'customer') {
+          fetchOrders();
+          fetchInquiries();
+        }
       } else {
         toast.error(result.error);
       }
@@ -202,6 +207,46 @@ const Profile = () => {
         fetchInquiries();
       }
     }
+  }, [user, activeTab]);
+
+  // Auto-refresh when page becomes visible (user switches back to tab/window)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user?._id) {
+        if (user?.role === 'customer') {
+          if (activeTab === 'orders') {
+            fetchOrders();
+          } else if (activeTab === 'inquiries') {
+            fetchInquiries();
+          }
+        } else if (user?.role === 'admin') {
+          fetchBackOfficeSettings();
+        }
+      }
+    };
+
+    const handleFocus = () => {
+      if (user?._id) {
+        if (user?.role === 'customer') {
+          if (activeTab === 'orders') {
+            fetchOrders();
+          } else if (activeTab === 'inquiries') {
+            fetchInquiries();
+          }
+        } else if (user?.role === 'admin') {
+          fetchBackOfficeSettings();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, activeTab]);
 
   // Back Office Settings state (Admin only)

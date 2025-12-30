@@ -18,6 +18,30 @@ const ComponentManagerDetail = () => {
     }
   }, [id]);
 
+  // Auto-refresh when page becomes visible (user switches back to tab/window)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && id) {
+        fetchInquiry();
+      }
+    };
+
+    const handleFocus = () => {
+      if (id) {
+        fetchInquiry();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   const fetchInquiry = async () => {
     try {
       setLoading(true);
