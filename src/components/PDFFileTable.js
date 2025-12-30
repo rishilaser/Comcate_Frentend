@@ -95,14 +95,34 @@ const PDFFileTable = ({ files, onUpdateFile, onDeleteFile, materialData = [] }) 
         [field]: processedValue
       };
       
-      // When material changes, reset thickness and grade
+      // When material changes, auto-set first available thickness and grade
       if (field === 'material') {
-        updated.thickness = '';
-        updated.grade = '';
+        const thicknesses = getThicknessesForMaterial(processedValue);
+        if (thicknesses.length > 0) {
+          // Auto-set first available thickness
+          updated.thickness = thicknesses[0];
+          
+          // Auto-set first available grade for the new material and thickness
+          const grades = getGradesForMaterialAndThickness(processedValue, thicknesses[0]);
+          if (grades.length > 0) {
+            updated.grade = grades[0];
+          } else {
+            updated.grade = '';
+          }
+        } else {
+          updated.thickness = '';
+          updated.grade = '';
+        }
       }
-      // When thickness changes, reset grade
+      // When thickness changes, auto-set first available grade
       else if (field === 'thickness') {
-        updated.grade = '';
+        const grades = getGradesForMaterialAndThickness(updated.material, processedValue);
+        if (grades.length > 0) {
+          // Auto-set first available grade
+          updated.grade = grades[0];
+        } else {
+          updated.grade = '';
+        }
       }
       
       return updated;

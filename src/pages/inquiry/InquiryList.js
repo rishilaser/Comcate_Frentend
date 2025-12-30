@@ -73,16 +73,31 @@ const InquiryList = () => {
               inquiryNumber: inquiry.inquiryNumber,
               customer: inquiry.customer,
               hasCustomer: !!inquiry.customer,
-              customerType: typeof inquiry.customer
+              customerType: typeof inquiry.customer,
+              userRole: user?.role
             });
           }
           
           // Extract customer information with better fallback
-          const customer = inquiry.customer || {};
-          const companyName = customer.companyName || customer.company || 'N/A';
-          const firstName = customer.firstName || '';
-          const lastName = customer.lastName || '';
-          const contactName = `${firstName} ${lastName}`.trim() || 'N/A';
+          // For customer users, use their own profile data since backend doesn't populate customer
+          // For admin/backoffice users, use the populated customer data from inquiry
+          let companyName = 'N/A';
+          let contactName = 'N/A';
+          
+          if (user?.role === 'customer') {
+            // Use logged-in user's data for customer inquiries
+            companyName = user.companyName || user.company || 'N/A';
+            const firstName = user.firstName || '';
+            const lastName = user.lastName || '';
+            contactName = `${firstName} ${lastName}`.trim() || 'N/A';
+          } else {
+            // For admin/backoffice, use customer data from inquiry (should be populated)
+            const customer = inquiry.customer || {};
+            companyName = customer.companyName || customer.company || 'N/A';
+            const firstName = customer.firstName || '';
+            const lastName = customer.lastName || '';
+            contactName = `${firstName} ${lastName}`.trim() || 'N/A';
+          }
           
           return {
             id: inquiry.inquiryNumber,

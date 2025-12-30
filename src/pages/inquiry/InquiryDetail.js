@@ -491,21 +491,44 @@ const InquiryDetail = () => {
     const updatedParts = [...editingParts];
     const currentPart = updatedParts[index];
     
-    // When material changes, reset thickness and grade
+    // When material changes, auto-set first available thickness and grade
     if (field === 'material') {
+      const thicknesses = getThicknessesForMaterial(value);
+      let newThickness = '';
+      let newGrade = '';
+      
+      if (thicknesses.length > 0) {
+        // Auto-set first available thickness
+        newThickness = thicknesses[0];
+        
+        // Auto-set first available grade for the new material and thickness
+        const grades = getGradesForMaterialAndThickness(value, newThickness);
+        if (grades.length > 0) {
+          newGrade = grades[0];
+        }
+      }
+      
       updatedParts[index] = {
         ...currentPart,
         [field]: value,
-        thickness: '',
-        grade: ''
+        thickness: newThickness,
+        grade: newGrade
       };
     }
-    // When thickness changes, reset grade
+    // When thickness changes, auto-set first available grade
     else if (field === 'thickness') {
+      const grades = getGradesForMaterialAndThickness(currentPart.material, value);
+      let newGrade = '';
+      
+      if (grades.length > 0) {
+        // Auto-set first available grade
+        newGrade = grades[0];
+      }
+      
       updatedParts[index] = {
         ...currentPart,
         [field]: value,
-        grade: ''
+        grade: newGrade
       };
     }
     // For other fields, just update the field
