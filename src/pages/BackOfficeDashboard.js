@@ -4,7 +4,6 @@ import BackOfficeMaterialManagement from './BackOfficeMaterialManagement';
 import QuotationForm from '../components/QuotationForm';
 import SubAdminManagement from '../components/SubAdminManagement';
 import AdminSidebar from '../components/AdminSidebar';
-import CloudinaryPDFViewer from '../components/CloudinaryPDFViewer';
 import { inquiryAPI, quotationAPI, adminAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -35,9 +34,6 @@ const BackOfficeDashboard = () => {
   const [showQuotationForm, setShowQuotationForm] = useState(false);
   const [selectedInquiry, setSelectedInquiry] = useState(null);
   const [lastFetchTime, setLastFetchTime] = useState(null);
-  const [showPDFViewer, setShowPDFViewer] = useState(false);
-  const [selectedQuotationPDF, setSelectedQuotationPDF] = useState(null);
-  const [sendingQuotations, setSendingQuotations] = useState(new Set()); // Track which quotations are being sent
 
   useEffect(() => {
     if (user) {
@@ -84,74 +80,58 @@ const BackOfficeDashboard = () => {
       }
       setStatsLoading(false);
 
-      // Handle inquiries - show all inquiries, but pending ones at the top
+      // Handle inquiries
       if (inquiryResponse.status === 'fulfilled' && inquiryResponse.value.data.success) {
-        const transformedInquiries = inquiryResponse.value.data.inquiries
-          .map(inquiry => ({
-            id: inquiry.inquiryNumber,
-            customer: `${inquiry.customer?.firstName || ''} ${inquiry.customer?.lastName || ''}`.trim() || 'N/A',
-            company: inquiry.customer?.companyName || 'N/A',
-            files: inquiry.files?.length || 0,
-            partsCount: inquiry.parts?.length || 0,
-            status: inquiry.status,
-            date: new Date(inquiry.createdAt).toLocaleDateString('en-US', {
-              month: 'numeric',
-              day: 'numeric',
-              year: 'numeric'
-            }),
-            createdAt: new Date(inquiry.createdAt), // Keep for sorting
-            _id: inquiry._id,
-            // Keep full inquiry data for quotation creation
-            inquiryNumber: inquiry.inquiryNumber,
-            parts: inquiry.parts || [],
-            customerData: inquiry.customer
-          }))
-          .sort((a, b) => {
-            // Sort: pending inquiries first, then by date (newest first)
-            if (a.status === 'pending' && b.status !== 'pending') return -1;
-            if (a.status !== 'pending' && b.status === 'pending') return 1;
-            return b.createdAt - a.createdAt; // Newest first
-          });
+        const transformedInquiries = inquiryResponse.value.data.inquiries.map(inquiry => ({
+          id: inquiry.inquiryNumber,
+          customer: `${inquiry.customer?.firstName || ''} ${inquiry.customer?.lastName || ''}`.trim() || 'N/A',
+          company: inquiry.customer?.companyName || 'N/A',
+          files: inquiry.files?.length || 0,
+          partsCount: inquiry.parts?.length || 0,
+          status: inquiry.status,
+          date: new Date(inquiry.createdAt).toLocaleDateString('en-US', {
+            month: 'numeric',
+            day: 'numeric',
+            year: 'numeric'
+          }),
+          _id: inquiry._id,
+          // Keep full inquiry data for quotation creation
+          inquiryNumber: inquiry.inquiryNumber,
+          parts: inquiry.parts || [],
+          customerData: inquiry.customer
+        }));
         setPendingInquiries(transformedInquiries);
       }
 
-      // Handle quotations - show all quotations, but draft ones (need to send) at the top
+      // Handle quotations
       if (quotationResponse.status === 'fulfilled' && quotationResponse.value.data.success) {
         console.log('=== QUOTATIONS DATA ===');
         console.log('Raw quotations:', quotationResponse.value.data.quotations);
         
-        const transformedQuotations = quotationResponse.value.data.quotations
-          .map(quotation => {
-            console.log(`Quotation ${quotation.quotationNumber}:`, {
-              hasQuotationPdf: !!quotation.quotationPdf,
-              quotationPdf: quotation.quotationPdf
-            });
-            
-            return {
-              id: quotation.quotationNumber,
-              inquiryId: quotation.inquiry?.inquiryNumber || 'N/A',
-              customer: `${quotation.inquiry?.customer?.firstName || ''} ${quotation.inquiry?.customer?.lastName || ''}`.trim() || 'N/A',
-              company: quotation.inquiry?.customer?.companyName || 'N/A',
-              amount: quotation.totalAmount,
-              status: quotation.status,
-              date: new Date(quotation.createdAt).toLocaleDateString('en-US', {
-                month: 'numeric',
-                day: 'numeric',
-                year: 'numeric'
-              }),
-              createdAt: new Date(quotation.createdAt), // Keep for sorting
-              _id: quotation._id,
-              quotationNumber: quotation.quotationNumber,
-              quotationPdf: quotation.quotationPdf,
-              quotationPdfCloudinaryUrl: quotation.quotationPdfCloudinaryUrl
-            };
-          })
-          .sort((a, b) => {
-            // Sort: draft quotations first (need to send), then by date (newest first)
-            if (a.status === 'draft' && b.status !== 'draft') return -1;
-            if (a.status !== 'draft' && b.status === 'draft') return 1;
-            return b.createdAt - a.createdAt; // Newest first
+        const transformedQuotations = quotationResponse.value.data.quotations.map(quotation => {
+          console.log(`Quotation ${quotation.quotationNumber}:`, {
+            hasQuotationPdf: !!quotation.quotationPdf,
+            quotationPdf: quotation.quotationPdf
           });
+          
+          return {
+            id: quotation.quotationNumber,
+            inquiryId: quotation.inquiry?.inquiryNumber || 'N/A',
+            customer: `${quotation.inquiry?.customer?.firstName || ''} ${quotation.inquiry?.customer?.lastName || ''}`.trim() || 'N/A',
+            company: quotation.inquiry?.customer?.companyName || 'N/A',
+            amount: quotation.totalAmount,
+            status: quotation.status,
+            date: new Date(quotation.createdAt).toLocaleDateString('en-US', {
+              month: 'numeric',
+              day: 'numeric',
+              year: 'numeric'
+            }),
+            _id: quotation._id,
+            quotationNumber: quotation.quotationNumber,
+            quotationPdf: quotation.quotationPdf,
+            quotationPdfCloudinaryUrl: quotation.quotationPdfCloudinaryUrl
+          };
+        });
         
         console.log('Transformed quotations:', transformedQuotations);
         console.log('Quotations with PDF:', transformedQuotations.filter(q => q.quotationPdf).length);
@@ -216,67 +196,10 @@ const BackOfficeDashboard = () => {
     setShowQuotationForm(true);
   };
 
-  // Function to refresh only inquiries without showing loading state
-  const refreshInquiriesOnly = async () => {
-    try {
-      const inquiryResponse = await inquiryAPI.getAllInquiries();
-      
-      if (inquiryResponse.data.success) {
-        const transformedInquiries = inquiryResponse.data.inquiries
-          .map(inquiry => ({
-            id: inquiry.inquiryNumber,
-            customer: `${inquiry.customer?.firstName || ''} ${inquiry.customer?.lastName || ''}`.trim() || 'N/A',
-            company: inquiry.customer?.companyName || 'N/A',
-            files: inquiry.files?.length || 0,
-            partsCount: inquiry.parts?.length || 0,
-            status: inquiry.status,
-            date: new Date(inquiry.createdAt).toLocaleDateString('en-US', {
-              month: 'numeric',
-              day: 'numeric',
-              year: 'numeric'
-            }),
-            createdAt: new Date(inquiry.createdAt),
-            _id: inquiry._id,
-            inquiryNumber: inquiry.inquiryNumber,
-            parts: inquiry.parts || [],
-            customerData: inquiry.customer
-          }))
-          .sort((a, b) => {
-            // Sort: pending inquiries first, then by date (newest first)
-            if (a.status === 'pending' && b.status !== 'pending') return -1;
-            if (a.status !== 'pending' && b.status === 'pending') return 1;
-            return b.createdAt - a.createdAt;
-          });
-        
-        setPendingInquiries(transformedInquiries);
-      }
-    } catch (error) {
-      console.error('Error refreshing inquiries:', error);
-    }
-  };
-
   const handleQuotationSuccess = (quotation) => {
     toast.success(`Quotation ${quotation.quotationNumber} created successfully!`);
-    // Update inquiry status immediately so it moves to its proper position
-    if (selectedInquiry && selectedInquiry._id) {
-      setPendingInquiries(prevInquiries => {
-        const updated = prevInquiries.map(inquiry => 
-          inquiry._id === selectedInquiry._id 
-            ? { ...inquiry, status: 'quoted' }
-            : inquiry
-        );
-        // Re-sort: pending inquiries first, then by date (newest first)
-        return updated.sort((a, b) => {
-          if (a.status === 'pending' && b.status !== 'pending') return -1;
-          if (a.status !== 'pending' && b.status === 'pending') return 1;
-          return b.createdAt - a.createdAt;
-        });
-      });
-    }
-    // Refresh inquiries in background after a short delay to sync with server
-    setTimeout(() => {
-      refreshInquiriesOnly();
-    }, 1000);
+    // Refresh the inquiries list with force refresh
+    fetchData(true);
   };
 
   const handleCloseQuotationForm = () => {
@@ -284,188 +207,85 @@ const BackOfficeDashboard = () => {
     setSelectedInquiry(null);
   };
 
-  // Function to refresh only quotations without showing loading state
-  // Preserves optimistic updates (sent status) to prevent button from reappearing
-  const refreshQuotationsOnly = async () => {
-    try {
-      const quotationResponse = await quotationAPI.getAllQuotations();
-      
-      if (quotationResponse.data.success) {
-        setQuotations(prevQuotations => {
-          // Create a map of current quotations by _id to preserve optimistic updates
-          const currentQuotationsMap = new Map();
-          prevQuotations.forEach(q => {
-            currentQuotationsMap.set(q._id, q);
-          });
-          
-          const transformedQuotations = quotationResponse.data.quotations
-            .map(quotation => {
-              const quotationId = quotation._id;
-              const currentQuotation = currentQuotationsMap.get(quotationId);
-              
-              // Preserve optimistic 'sent' status permanently
-              // If we have locally marked it as 'sent', always keep it 'sent' to prevent button from reappearing
-              // This ensures the button stays hidden even if server hasn't updated yet
-              const status = (currentQuotation && currentQuotation.status === 'sent') 
-                ? 'sent'  // Always preserve optimistic 'sent' status
-                : quotation.status;  // Use server status for others
-              
-              return {
-                id: quotation.quotationNumber,
-                inquiryId: quotation.inquiry?.inquiryNumber || 'N/A',
-                customer: `${quotation.inquiry?.customer?.firstName || ''} ${quotation.inquiry?.customer?.lastName || ''}`.trim() || 'N/A',
-                company: quotation.inquiry?.customer?.companyName || 'N/A',
-                amount: quotation.totalAmount,
-                status: status,
-                date: new Date(quotation.createdAt).toLocaleDateString('en-US', {
-                  month: 'numeric',
-                  day: 'numeric',
-                  year: 'numeric'
-                }),
-                createdAt: new Date(quotation.createdAt),
-                _id: quotation._id,
-                quotationNumber: quotation.quotationNumber,
-                quotationPdf: quotation.quotationPdf,
-                quotationPdfCloudinaryUrl: quotation.quotationPdfCloudinaryUrl
-              };
-            })
-            .sort((a, b) => {
-              // Sort: draft quotations first (need to send), then by date (newest first)
-              if (a.status === 'draft' && b.status !== 'draft') return -1;
-              if (a.status !== 'draft' && b.status === 'draft') return 1;
-              return b.createdAt - a.createdAt;
-            });
-          
-          return transformedQuotations;
-        });
-      }
-    } catch (error) {
-      console.error('Error refreshing quotations:', error);
-    }
-  };
-
   const handleSendQuotation = async (quotationId) => {
-    // Prevent duplicate sends for the same quotation
-    if (sendingQuotations.has(quotationId)) {
-      return;
-    }
-
-    // OPTIMISTIC UPDATE: Update state IMMEDIATELY to hide Send button before API call
-    // This happens synchronously, so button disappears instantly
-    setQuotations(prevQuotations => {
-      const updated = prevQuotations.map(quotation => {
-        if (quotation._id === quotationId) {
-          // Immediately change status to 'sent' - this will hide the button
-          return { ...quotation, status: 'sent' };
-        }
-        return quotation;
-      });
-      
-      // Re-sort: draft quotations first (need to send), then by date (newest first)
-      return updated.sort((a, b) => {
-        if (a.status === 'draft' && b.status !== 'draft') return -1;
-        if (a.status !== 'draft' && b.status === 'draft') return 1;
-        return b.createdAt - a.createdAt;
-      });
-    });
-
-    // Add to sending set (after state update to ensure button hides first)
-    setSendingQuotations(prev => new Set(prev).add(quotationId));
-
     try {
       const response = await quotationAPI.sendQuotation(quotationId);
       
       if (response.data.success) {
         toast.success('Quotation sent to customer successfully!');
-        
-        // Refresh quotations in background after delay to sync with server
-        // The refresh function will preserve the 'sent' status to keep button hidden
-        setTimeout(() => {
-          refreshQuotationsOnly();
-        }, 2000); // Increased delay to ensure server has updated
+        // Refresh the quotations list with force refresh
+        fetchData(true);
       } else {
-        // Revert the optimistic update on failure
         toast.error(response.data.message || 'Failed to send quotation');
-        setQuotations(prevQuotations => {
-          const updated = prevQuotations.map(quotation => 
-            quotation._id === quotationId 
-              ? { ...quotation, status: 'draft' }
-              : quotation
-          );
-          
-          // Re-sort: draft quotations first (need to send), then by date (newest first)
-          return updated.sort((a, b) => {
-            if (a.status === 'draft' && b.status !== 'draft') return -1;
-            if (a.status !== 'draft' && b.status === 'draft') return 1;
-            return b.createdAt - a.createdAt;
-          });
-        });
       }
     } catch (error) {
       console.error('Error sending quotation:', error);
       toast.error('Failed to send quotation');
-      
-      // Revert the optimistic update on error
-      setQuotations(prevQuotations => {
-        const updated = prevQuotations.map(quotation => 
-          quotation._id === quotationId 
-            ? { ...quotation, status: 'draft' }
-            : quotation
-        );
-        
-        // Re-sort: draft quotations first (need to send), then by date (newest first)
-        return updated.sort((a, b) => {
-          if (a.status === 'draft' && b.status !== 'draft') return -1;
-          if (a.status !== 'draft' && b.status === 'draft') return 1;
-          return b.createdAt - a.createdAt;
-        });
-      });
-    } finally {
-      // Remove from sending set
-      setSendingQuotations(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(quotationId);
-        return newSet;
-      });
     }
   };
 
   const handleDownloadPDF = async (quotation) => {
-    // ✅ Use Cloudinary URL directly for iframe viewer
-    const cloudinaryUrl = quotation?.quotationPdfCloudinaryUrl || quotation?.quotationPdf;
-    
-    if (cloudinaryUrl && cloudinaryUrl.startsWith('http')) {
-      // Show Cloudinary iframe viewer
-      setSelectedQuotationPDF({
-        url: cloudinaryUrl,
-        filename: quotation?.quotationPdfFilename || `quotation_${quotation.quotationNumber || quotation._id}.pdf`
+    try {
+      const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('token');
+      
+      // Always use API endpoint to avoid 401 errors with Cloudinary
+      // The backend will handle fetching from Cloudinary if needed
+      const apiPdfUrl = `${apiBaseUrl}/quotation/${quotation._id}/pdf?download=true`;
+      
+      const response = await fetch(apiPdfUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
-      setShowPDFViewer(true);
-    } else {
-      // Fallback: Try to fetch from API if Cloudinary URL not available
-      try {
-        toast.loading('Fetching PDF from server...', { id: 'pdf-loading' });
-        const response = await quotationAPI.getQuotationPDF(quotation._id);
+      
+      if (response.ok) {
+        const blob = await response.blob();
         
-        // Create blob URL from the PDF data
-        const blob = new Blob([response.data], { type: 'application/pdf' });
-        const blobUrl = URL.createObjectURL(blob);
+        if (blob.size === 0) {
+          toast.error('PDF is empty. Please try again.');
+          return;
+        }
         
-        // Show PDF viewer with blob URL
-        setSelectedQuotationPDF({
-          url: blobUrl,
-          filename: quotation?.quotationPdfFilename || `quotation_${quotation.quotationNumber || quotation._id}.pdf`
-        });
-        setShowPDFViewer(true);
+        // Validate PDF header
+        const arrayBuffer = await blob.slice(0, 4).arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        const pdfHeader = String.fromCharCode(...uint8Array);
         
-        toast.success('PDF loaded successfully', { id: 'pdf-loading' });
-      } catch (error) {
-        console.error('Error fetching PDF:', error);
-        toast.error(
-          error.response?.data?.message || 'PDF not available. Please ensure the quotation has a PDF uploaded.',
-          { id: 'pdf-loading' }
-        );
+        if (pdfHeader !== '%PDF') {
+          const text = await blob.text();
+          try {
+            const errorData = JSON.parse(text);
+            toast.error(errorData.message || 'Failed to download PDF');
+          } catch (e) {
+            toast.error('Invalid PDF format received');
+          }
+          return;
+        }
+        
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `quotation_${quotation.quotationNumber || quotation._id}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        toast.success('PDF downloaded successfully!');
+      } else {
+        const errorText = await response.text();
+        try {
+          const errorData = JSON.parse(errorText);
+          toast.error(errorData.message || 'Failed to download PDF');
+        } catch (e) {
+          toast.error('Failed to download PDF');
+        }
       }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      toast.error('Failed to download PDF. Please try again.');
     }
   };
 
@@ -905,14 +725,9 @@ const BackOfficeDashboard = () => {
                               {quotation.status === 'draft' && (
                                 <button 
                                   onClick={() => handleSendQuotation(quotation._id)}
-                                  disabled={sendingQuotations.has(quotation._id)}
-                                  className={`px-3 py-1 rounded-md text-sm font-medium ${
-                                    sendingQuotations.has(quotation._id)
-                                      ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                                      : 'text-blue-600 hover:text-blue-900 bg-blue-50'
-                                  }`}
+                                  className="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1 rounded-md text-sm font-medium"
                                 >
-                                  {sendingQuotations.has(quotation._id) ? 'Sending...' : 'Send'}
+                                  Send
                                 </button>
                               )}
                               <button
@@ -1046,22 +861,6 @@ const BackOfficeDashboard = () => {
           inquiry={selectedInquiry}
           onClose={handleCloseQuotationForm}
           onSuccess={handleQuotationSuccess}
-        />
-      )}
-
-      {/* Cloudinary PDF Viewer Modal */}
-      {showPDFViewer && selectedQuotationPDF && (
-        <CloudinaryPDFViewer
-          cloudinaryUrl={selectedQuotationPDF.url}
-          filename={selectedQuotationPDF.filename}
-          onClose={() => {
-            // Clean up blob URL if it's a blob URL to prevent memory leaks
-            if (selectedQuotationPDF.url && selectedQuotationPDF.url.startsWith('blob:')) {
-              URL.revokeObjectURL(selectedQuotationPDF.url);
-            }
-            setShowPDFViewer(false);
-            setSelectedQuotationPDF(null);
-          }}
         />
       )}
     </div>

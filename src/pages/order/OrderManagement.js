@@ -16,6 +16,7 @@ const OrderManagement = () => {
     trackingNumber: '',
     estimatedDelivery: ''
   });
+  const [updatingOrders, setUpdatingOrders] = useState(new Set()); // Track which orders are being updated
 
   useEffect(() => {
     fetchOrders();
@@ -32,17 +33,18 @@ const OrderManagement = () => {
       if (response.data.success) {
         console.log('Fetched orders:', response.data.orders);
         const transformedOrders = response.data.orders.map(order => ({
-          id: order._id,
+          id: order._id || order.id,
           orderNumber: order.orderNumber,
           customerName: `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim() || 'N/A',
           title: `Order for ${order.parts?.length || 0} parts`,
           status: order.status,
           amount: order.totalAmount,
           createdAt: new Date(order.createdAt).toISOString().split('T')[0],
-          expectedDelivery: order.production?.estimatedCompletion ? 
-            new Date(order.production.estimatedCompletion).toISOString().split('T')[0] : 'TBD',
-          // Keep full order data for actions
-          _id: order._id,
+          expectedDelivery: order.dispatch?.estimatedDelivery 
+            ? new Date(order.dispatch.estimatedDelivery).toISOString().split('T')[0] 
+            : order.production?.estimatedCompletion 
+            ? new Date(order.production.estimatedCompletion).toISOString().split('T')[0] 
+            : 'TBD',
           customer: order.customer,
           parts: order.parts,
           payment: order.payment,
@@ -82,12 +84,18 @@ const OrderManagement = () => {
     }
 
     try {
+      const orderId = selectedOrder.id;
+      if (!orderId) {
+        toast.error('Invalid order ID');
+        return;
+      }
+
       console.log('Setting delivery time with data:', {
-        orderId: selectedOrder._id,
+        orderId: orderId,
         deliveryTime: deliveryTime
       });
       
-      const response = await adminAPI.updateDeliveryDetails(selectedOrder._id, {
+      const response = await adminAPI.updateDeliveryDetails(orderId, {
         estimatedDelivery: deliveryTime,
         notes: 'Production started with estimated delivery time'
       });
@@ -108,59 +116,199 @@ const OrderManagement = () => {
   };
 
   // Handler for confirming order
-  const handleConfirmOrder = async (order) => {
+  const handleConfirmOrder = async (order, event) => {
+    // Prevent default and stop propagation
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    // Get order ID - only use order.id
+    const orderId = order.id;
+    if (!orderId) {
+      toast.error('Invalid order ID');
+      return;
+    }
+
+    // Check if order is already confirmed
+    if (order.status === 'confirmed') {
+      toast.info('Order is already confirmed');
+      return;
+    }
+
+    // Prevent multiple clicks
+    if (updatingOrders.has(orderId)) {
+      return;
+    }
+
     try {
-      const response = await adminAPI.updateOrderStatus(order._id, 'confirmed', {
+      // Add to updating set immediately
+      setUpdatingOrders(prev => new Set(prev).add(orderId));
+
+      // Optimistic update - immediately update UI
+      setOrders(prevOrders => 
+        prevOrders.map(o => {
+          return o.id === orderId ? { ...o, status: 'confirmed' } : o;
+        })
+      );
+
+      const response = await adminAPI.updateOrderStatus(orderId, 'confirmed', {
         notes: 'Order confirmed and ready for production'
       });
 
       if (response.data.success) {
         toast.success('Order confirmed successfully');
-        fetchOrders(); // Refresh orders
+        // Refresh orders to get latest data from server
+        await fetchOrders();
       } else {
+        // Revert optimistic update on error
+        await fetchOrders();
         toast.error(response.data.message || 'Failed to confirm order');
       }
     } catch (error) {
       console.error('Error confirming order:', error);
-      toast.error('Failed to confirm order');
+      console.error('Error details:', error.response?.data);
+      // Revert optimistic update on error
+      await fetchOrders();
+      toast.error(error.response?.data?.message || 'Failed to confirm order');
+    } finally {
+      // Remove from updating set
+      setUpdatingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
     }
   };
 
   // Handler for starting production
-  const handleStartProduction = async (order) => {
+  const handleStartProduction = async (order, event) => {
+    // Prevent default and stop propagation
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    // Get order ID - only use order.id
+    const orderId = order.id;
+    if (!orderId) {
+      toast.error('Invalid order ID');
+      return;
+    }
+
+    // Check if order is already in production
+    if (order.status === 'in_production') {
+      toast.info('Production has already started for this order');
+      return;
+    }
+
+    // Prevent multiple clicks
+    if (updatingOrders.has(orderId)) {
+      return;
+    }
+
     try {
-      const response = await adminAPI.updateOrderStatus(order._id, 'in_production', {
+      // Add to updating set immediately
+      setUpdatingOrders(prev => new Set(prev).add(orderId));
+
+      // Optimistic update - immediately update UI
+      setOrders(prevOrders => 
+        prevOrders.map(o => {
+          return o.id === orderId ? { ...o, status: 'in_production' } : o;
+        })
+      );
+
+      const response = await adminAPI.updateOrderStatus(orderId, 'in_production', {
         notes: 'Production started for this order'
       });
 
       if (response.data.success) {
         toast.success('Production started for order');
-        fetchOrders(); // Refresh orders
+        // Refresh orders to get latest data from server
+        await fetchOrders();
       } else {
+        // Revert optimistic update on error
+        await fetchOrders();
         toast.error(response.data.message || 'Failed to start production');
       }
     } catch (error) {
       console.error('Error starting production:', error);
-      toast.error('Failed to start production');
+      console.error('Error details:', error.response?.data);
+      // Revert optimistic update on error
+      await fetchOrders();
+      toast.error(error.response?.data?.message || 'Failed to start production');
+    } finally {
+      // Remove from updating set
+      setUpdatingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
     }
   };
 
   // Handler for marking order ready for dispatch
-  const handleMarkReadyForDispatch = async (order) => {
+  const handleMarkReadyForDispatch = async (order, event) => {
+    // Prevent default and stop propagation
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    // Get order ID - only use order.id
+    const orderId = order.id;
+    if (!orderId) {
+      toast.error('Invalid order ID');
+      return;
+    }
+
+    // Check if order is already ready for dispatch
+    if (order.status === 'ready_for_dispatch') {
+      toast.info('Order is already ready for dispatch');
+      return;
+    }
+
+    // Prevent multiple clicks
+    if (updatingOrders.has(orderId)) {
+      return;
+    }
+
     try {
-      const response = await adminAPI.updateOrderStatus(order._id, 'ready_for_dispatch', {
+      // Add to updating set immediately
+      setUpdatingOrders(prev => new Set(prev).add(orderId));
+
+      // Optimistic update - immediately update UI
+      setOrders(prevOrders => 
+        prevOrders.map(o => {
+          return o.id === orderId ? { ...o, status: 'ready_for_dispatch' } : o;
+        })
+      );
+
+      const response = await adminAPI.updateOrderStatus(orderId, 'ready_for_dispatch', {
         notes: 'Order completed and ready for dispatch'
       });
 
       if (response.data.success) {
         toast.success('Order marked as ready for dispatch');
-        fetchOrders(); // Refresh orders
+        // Refresh orders to get latest data from server
+        await fetchOrders();
       } else {
+        // Revert optimistic update on error
+        await fetchOrders();
         toast.error(response.data.message || 'Failed to update order status');
       }
     } catch (error) {
       console.error('Error updating order status:', error);
-      toast.error('Failed to update order status');
+      // Revert optimistic update on error
+      await fetchOrders();
+      toast.error(error.response?.data?.message || 'Failed to update order status');
+    } finally {
+      // Remove from updating set
+      setUpdatingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
     }
   };
 
@@ -182,17 +330,31 @@ const OrderManagement = () => {
     }
 
     try {
+      const orderId = selectedOrder.id;
+      if (!orderId) {
+        toast.error('Invalid order ID');
+        return;
+      }
+
       console.log('Dispatching order with data:', {
-        orderId: selectedOrder._id,
+        orderId: orderId,
         dispatchData: dispatchData
       });
       
-      const response = await adminAPI.updateDispatchDetails(selectedOrder._id, dispatchData);
+      const response = await adminAPI.updateDispatchDetails(orderId, dispatchData);
       console.log('Dispatch response:', response);
 
       if (response.data.success) {
         toast.success('Order dispatched and customer notified');
         setShowDispatchModal(false);
+        
+        // Optimistic update - set status to dispatched
+        setOrders(prevOrders => 
+          prevOrders.map(o => 
+            o.id === orderId ? { ...o, status: 'dispatched' } : o
+          )
+        );
+        
         fetchOrders(); // Refresh orders
       } else {
         toast.error(response.data.message || 'Failed to dispatch order');
@@ -206,20 +368,54 @@ const OrderManagement = () => {
 
   // Handler for marking order as delivered
   const handleMarkDelivered = async (order) => {
+    // Get order ID - only use order.id
+    const orderId = order.id;
+    if (!orderId) {
+      toast.error('Invalid order ID');
+      return;
+    }
+
+    // Prevent multiple clicks
+    if (updatingOrders.has(orderId)) {
+      return;
+    }
+
     try {
-      const response = await adminAPI.updateOrderStatus(order._id, 'delivered', {
+      // Add to updating set
+      setUpdatingOrders(prev => new Set(prev).add(orderId));
+
+      // Optimistic update - immediately update UI
+      setOrders(prevOrders => 
+        prevOrders.map(o => 
+          o.id === orderId ? { ...o, status: 'delivered' } : o
+        )
+      );
+
+      const response = await adminAPI.updateOrderStatus(orderId, 'delivered', {
         notes: 'Order delivered successfully'
       });
 
       if (response.data.success) {
         toast.success('Order marked as delivered');
-        fetchOrders(); // Refresh orders
+        // Refresh orders to get latest data from server
+        await fetchOrders();
       } else {
+        // Revert optimistic update on error
+        await fetchOrders();
         toast.error(response.data.message || 'Failed to update order status');
       }
     } catch (error) {
       console.error('Error updating order status:', error);
-      toast.error('Failed to update order status');
+      // Revert optimistic update on error
+      await fetchOrders();
+      toast.error(error.response?.data?.message || 'Failed to update order status');
+    } finally {
+      // Remove from updating set
+      setUpdatingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
     }
   };
 
@@ -626,7 +822,20 @@ const OrderManagement = () => {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
                     {filteredOrders.map((order) => (
-                      <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                      <tr key={order.id} className="hover:bg-gray-50 transition-colors" onClick={(e) => {
+                        // Prevent row click from interfering with button clicks
+                        // On desktop, ensure button clicks are properly handled
+                        const target = e.target;
+                        const isButton = target.tagName === 'BUTTON' || target.closest('button');
+                        const isLink = target.tagName === 'A' || target.closest('a');
+                        const isInput = target.tagName === 'INPUT' || target.closest('input');
+                        
+                        if (isButton || isLink || isInput) {
+                          // Let button/link handle the click
+                          return;
+                        }
+                        // Optional: Add row click handler if needed (e.g., navigate to order detail)
+                      }}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-semibold text-gray-900">
                             {order.title}
@@ -675,7 +884,9 @@ const OrderManagement = () => {
                                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                               </svg>
                             )}
-                            {order.status.charAt(0).toUpperCase() + order.status.slice(1).replace('_', ' ')}
+                            {order.status.split('_').map(word => 
+                              word.charAt(0).toUpperCase() + word.slice(1)
+                            ).join(' ')}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
@@ -687,26 +898,36 @@ const OrderManagement = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                           {order.expectedDelivery === 'TBD' ? <span className="text-gray-400">TBD</span> : new Date(order.expectedDelivery).toLocaleDateString()}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="flex items-center justify-end space-x-2">
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
+                          <div className="flex items-center justify-end space-x-2 relative z-10">
                             <Link
                               to={`/order/${order.id}`}
-                              className="px-3 py-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
-                              onClick={(e) => e.stopPropagation()}
+                              className="px-3 py-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors relative z-10"
+                              onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
                             >
                               View
                             </Link>
                             {order.status === 'pending' && (
                               <>
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); handleConfirmOrder(order); }}
-                                  className="px-3 py-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                                  type="button"
+                                  onClick={(e) => handleConfirmOrder(order, e)}
+                                  disabled={updatingOrders.has(order.id)}
+                                  className={`px-3 py-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors relative z-10 ${
+                                    updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'
+                                  }`}
+                                  style={{ pointerEvents: updatingOrders.has(order.id) ? 'none' : 'auto' }}
                                 >
-                                  Confirm
+                                  {updatingOrders.has(order.id) ? 'Updating...' : 'Confirm'}
                                 </button>
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); handleSetDeliveryTime(order); }}
-                                  className="px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
+                                  type="button"
+                                  onClick={(e) => { 
+                                    e.preventDefault();
+                                    e.stopPropagation(); 
+                                    handleSetDeliveryTime(order); 
+                                  }}
+                                  className="px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors relative z-10 cursor-pointer"
                                 >
                                   Set Delivery
                                 </button>
@@ -715,14 +936,24 @@ const OrderManagement = () => {
                             {order.status === 'confirmed' && (
                               <>
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); handleStartProduction(order); }}
-                                  className="px-3 py-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-md transition-colors"
+                                  type="button"
+                                  onClick={(e) => handleStartProduction(order, e)}
+                                  disabled={updatingOrders.has(order.id)}
+                                  className={`px-3 py-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-md transition-colors relative z-10 ${
+                                    updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'
+                                  }`}
+                                  style={{ pointerEvents: updatingOrders.has(order.id) ? 'none' : 'auto' }}
                                 >
-                                  Start Production
+                                  {updatingOrders.has(order.id) ? 'Updating...' : 'Start Production'}
                                 </button>
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); handleSetDeliveryTime(order); }}
-                                  className="px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
+                                  type="button"
+                                  onClick={(e) => { 
+                                    e.preventDefault();
+                                    e.stopPropagation(); 
+                                    handleSetDeliveryTime(order); 
+                                  }}
+                                  className="px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors relative z-10 cursor-pointer"
                                 >
                                   Set Delivery
                                 </button>
@@ -731,14 +962,24 @@ const OrderManagement = () => {
                             {order.status === 'in_production' && (
                               <>
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); handleMarkReadyForDispatch(order); }}
-                                  className="px-3 py-1.5 text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-md transition-colors"
+                                  type="button"
+                                  onClick={(e) => handleMarkReadyForDispatch(order, e)}
+                                  disabled={updatingOrders.has(order.id)}
+                                  className={`px-3 py-1.5 text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-md transition-colors relative z-10 ${
+                                    updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'
+                                  }`}
+                                  style={{ pointerEvents: updatingOrders.has(order.id) ? 'none' : 'auto' }}
                                 >
-                                  Ready
+                                  {updatingOrders.has(order.id) ? 'Updating...' : 'Ready'}
                                 </button>
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); handleSetDeliveryTime(order); }}
-                                  className="px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
+                                  type="button"
+                                  onClick={(e) => { 
+                                    e.preventDefault();
+                                    e.stopPropagation(); 
+                                    handleSetDeliveryTime(order); 
+                                  }}
+                                  className="px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors relative z-10 cursor-pointer"
                                 >
                                   Update
                                 </button>
@@ -746,18 +987,32 @@ const OrderManagement = () => {
                             )}
                             {order.status === 'ready_for_dispatch' && (
                               <button
-                                onClick={(e) => { e.stopPropagation(); handleDispatchOrder(order); }}
-                                className="px-3 py-1.5 text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 rounded-md transition-colors"
+                                type="button"
+                                onClick={(e) => { 
+                                  e.preventDefault();
+                                  e.stopPropagation(); 
+                                  handleDispatchOrder(order); 
+                                }}
+                                className="px-3 py-1.5 text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 rounded-md transition-colors relative z-10 cursor-pointer"
                               >
                                 Dispatch
                               </button>
                             )}
                             {order.status === 'dispatched' && (
                               <button
-                                onClick={(e) => { e.stopPropagation(); handleMarkDelivered(order); }}
-                                className="px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
+                                type="button"
+                                onClick={(e) => { 
+                                  e.preventDefault();
+                                  e.stopPropagation(); 
+                                  handleMarkDelivered(order); 
+                                }}
+                                disabled={updatingOrders.has(order.id)}
+                                className={`px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors relative z-10 ${
+                                  updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'
+                                }`}
+                                style={{ pointerEvents: updatingOrders.has(order.id) ? 'none' : 'auto' }}
                               >
-                                Mark Delivered
+                                {updatingOrders.has(order.id) ? 'Updating...' : 'Mark Delivered'}
                               </button>
                             )}
                           </div>

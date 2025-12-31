@@ -376,7 +376,7 @@ const InquiryList = () => {
                     </div>
                     
                     {/* Quotation Status and Actions */}
-                    {inquiry.quotation && (
+                    {inquiry.quotation ? (
                       <div className="mt-2 mb-2 space-y-3">
                         <div className="flex flex-col items-end space-y-2">
                           <div className="flex items-center space-x-2">
@@ -392,7 +392,7 @@ const InquiryList = () => {
                                inquiry.quotation.status}
                             </span>
                             <span className="text-base font-bold text-gray-900">
-                              ₹{inquiry.quotation.totalAmount?.toFixed(2) || '0.00'}
+                              ₹{(inquiry.quotation.totalAmount || 0).toFixed(2)}
                             </span>
                           </div>
                         </div>
@@ -449,7 +449,7 @@ const InquiryList = () => {
                           </div>
                         )}
                       </div>
-                    )}
+                    ) : null}
                     
                     <div className="flex items-center text-gray-400 bg-gray-50 px-2 py-1 rounded-lg">
                       <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
