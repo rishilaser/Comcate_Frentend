@@ -397,28 +397,6 @@ const InquiryList = () => {
                           </div>
                         </div>
                         
-                        {inquiry.quotation.status === 'sent' && (() => {
-                          const quotationId = getQuotationId(inquiry.quotation);
-                          if (!quotationId) return null;
-                          return (
-                            <div className="flex flex-col space-y-2">
-                              <Link
-                                to={`/quotation/${quotationId}/response`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center justify-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-1 focus:ring-green-500"
-                              >
-                                ✓ Accept Quotation
-                              </Link>
-                              <Link
-                                to={`/quotation/${quotationId}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center justify-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              >
-                                View Details
-                              </Link>
-                            </div>
-                          );
-                        })()}
                         
                         {inquiry.quotation.status === 'accepted' && (() => {
                           const quotationId = getQuotationId(inquiry.quotation);

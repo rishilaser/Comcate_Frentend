@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import BackOfficeMaterialManagement from './BackOfficeMaterialManagement';
 import QuotationForm from '../components/QuotationForm';
@@ -42,7 +42,6 @@ const BackOfficeDashboard = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Update active tab from URL query parameter
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab) {
@@ -50,23 +49,91 @@ const BackOfficeDashboard = () => {
     }
   }, [searchParams]);
 
-  const fetchData = async (forceRefresh = false) => {
+  // Helper function to format dates (reusable)
+  const formatDate = useCallback((dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'numeric',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  }, []);
+
+  // Helper function to format customer name (reusable)
+  const formatCustomerName = useCallback((customer) => {
+    return `${customer?.firstName || ''} ${customer?.lastName || ''}`.trim() || 'N/A';
+  }, []);
+
+  // Helper function to get status badge classes (reusable)
+  const getStatusBadgeClasses = useCallback((status, type = 'inquiry') => {
+    if (type === 'inquiry') {
+      switch (status) {
+        case 'pending':
+          return 'bg-yellow-100 text-yellow-800';
+        case 'quoted':
+          return 'bg-green-100 text-green-800';
+        case 'rejected':
+          return 'bg-red-100 text-red-800';
+        case 'accepted':
+          return 'bg-blue-100 text-blue-800';
+        default:
+          return 'bg-gray-100 text-gray-800';
+      }
+    } else if (type === 'quotation') {
+      switch (status) {
+        case 'draft':
+          return 'bg-gray-100 text-gray-800';
+        case 'sent':
+          return 'bg-yellow-100 text-yellow-800';
+        case 'accepted':
+          return 'bg-green-100 text-green-800';
+        case 'rejected':
+          return 'bg-red-100 text-red-800';
+        default:
+          return 'bg-blue-100 text-blue-800';
+      }
+    } else if (type === 'order') {
+      switch (status) {
+        case 'pending':
+          return 'bg-yellow-100 text-yellow-800';
+        case 'confirmed':
+          return 'bg-blue-100 text-blue-800';
+        case 'in_production':
+          return 'bg-purple-100 text-purple-800';
+        case 'ready_for_dispatch':
+          return 'bg-orange-100 text-orange-800';
+        case 'dispatched':
+          return 'bg-indigo-100 text-indigo-800';
+        case 'delivered':
+          return 'bg-green-100 text-green-800';
+        case 'cancelled':
+          return 'bg-red-100 text-red-800';
+        default:
+          return 'bg-gray-100 text-gray-800';
+      }
+    }
+    return 'bg-gray-100 text-gray-800';
+  }, []);
+
+  // Helper function to format status text (reusable)
+  const formatStatusText = useCallback((status) => {
+    if (!status) return 'Unknown';
+    return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
+  }, []);
+
+  const fetchData = useCallback(async (forceRefresh = false) => {
     try {
-      // Check if we need to refresh data (cache for 30 seconds)
       const now = Date.now();
       const shouldRefresh = forceRefresh || !lastFetchTime || (now - lastFetchTime) > 30000;
       
       if (!shouldRefresh) {
-        return; // Use cached data
+        return;
       }
 
       setLoading(true);
       setStatsLoading(true);
       
-      // Fetch dashboard stats first (fast)
       const statsPromise = adminAPI.getDashboardStats();
       
-      // Fetch all data in parallel for better performance
       const [statsResponse, inquiryResponse, quotationResponse, orderResponse] = await Promise.allSettled([
         statsPromise,
         inquiryAPI.getAllInquiries(),
@@ -74,28 +141,21 @@ const BackOfficeDashboard = () => {
         user && ['admin', 'backoffice'].includes(user.role) ? adminAPI.getAllOrders() : Promise.resolve({ data: { success: false } })
       ]);
 
-      // Handle dashboard stats
       if (statsResponse.status === 'fulfilled' && statsResponse.value.data.success) {
         setDashboardStats(statsResponse.value.data.stats);
       }
       setStatsLoading(false);
 
-      // Handle inquiries
       if (inquiryResponse.status === 'fulfilled' && inquiryResponse.value.data.success) {
         const transformedInquiries = inquiryResponse.value.data.inquiries.map(inquiry => ({
           id: inquiry.inquiryNumber,
-          customer: `${inquiry.customer?.firstName || ''} ${inquiry.customer?.lastName || ''}`.trim() || 'N/A',
+          customer: formatCustomerName(inquiry.customer),
           company: inquiry.customer?.companyName || 'N/A',
           files: inquiry.files?.length || 0,
           partsCount: inquiry.parts?.length || 0,
           status: inquiry.status,
-          date: new Date(inquiry.createdAt).toLocaleDateString('en-US', {
-            month: 'numeric',
-            day: 'numeric',
-            year: 'numeric'
-          }),
+          date: formatDate(inquiry.createdAt),
           _id: inquiry._id,
-          // Keep full inquiry data for quotation creation
           inquiryNumber: inquiry.inquiryNumber,
           parts: inquiry.parts || [],
           customerData: inquiry.customer
@@ -103,68 +163,41 @@ const BackOfficeDashboard = () => {
         setPendingInquiries(transformedInquiries);
       }
 
-      // Handle quotations
       if (quotationResponse.status === 'fulfilled' && quotationResponse.value.data.success) {
-        console.log('=== QUOTATIONS DATA ===');
-        console.log('Raw quotations:', quotationResponse.value.data.quotations);
-        
-        const transformedQuotations = quotationResponse.value.data.quotations.map(quotation => {
-          console.log(`Quotation ${quotation.quotationNumber}:`, {
-            hasQuotationPdf: !!quotation.quotationPdf,
-            quotationPdf: quotation.quotationPdf
-          });
-          
-          return {
-            id: quotation.quotationNumber,
-            inquiryId: quotation.inquiry?.inquiryNumber || 'N/A',
-            customer: `${quotation.inquiry?.customer?.firstName || ''} ${quotation.inquiry?.customer?.lastName || ''}`.trim() || 'N/A',
-            company: quotation.inquiry?.customer?.companyName || 'N/A',
-            amount: quotation.totalAmount,
-            status: quotation.status,
-            date: new Date(quotation.createdAt).toLocaleDateString('en-US', {
-              month: 'numeric',
-              day: 'numeric',
-              year: 'numeric'
-            }),
-            _id: quotation._id,
-            quotationNumber: quotation.quotationNumber,
-            quotationPdf: quotation.quotationPdf,
-            quotationPdfCloudinaryUrl: quotation.quotationPdfCloudinaryUrl
-          };
-        });
-        
-        console.log('Transformed quotations:', transformedQuotations);
-        console.log('Quotations with PDF:', transformedQuotations.filter(q => q.quotationPdf).length);
+        const transformedQuotations = quotationResponse.value.data.quotations.map(quotation => ({
+          id: quotation.quotationNumber,
+          inquiryId: quotation.inquiry?.inquiryNumber || 'N/A',
+          customer: formatCustomerName(quotation.inquiry?.customer),
+          company: quotation.inquiry?.customer?.companyName || 'N/A',
+          amount: quotation.totalAmount,
+          status: quotation.status,
+          date: formatDate(quotation.createdAt),
+          _id: quotation._id,
+          quotationNumber: quotation.quotationNumber,
+          quotationPdf: quotation.quotationPdf,
+          quotationPdfCloudinaryUrl: quotation.quotationPdfCloudinaryUrl
+        }));
         setQuotations(transformedQuotations);
       }
 
-      // Handle orders
       if (orderResponse.status === 'fulfilled' && orderResponse.value.data.success) {
         const transformedOrders = orderResponse.value.data.orders.map(order => ({
           id: order.orderNumber,
-          orderId: order.orderNumber,
-          customer: `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim() || 'N/A',
+          customer: formatCustomerName(order.customer),
           items: order.parts?.length || 0,
           status: order.status,
           amount: order.totalAmount,
-          date: new Date(order.createdAt).toLocaleDateString('en-US', {
-            month: 'numeric',
-            day: 'numeric',
-            year: 'numeric'
-          }),
+          date: formatDate(order.createdAt),
           _id: order._id
         }));
         setOrders(transformedOrders);
       } else if (orderResponse.status === 'rejected') {
         const orderError = orderResponse.reason;
         
-        // Ignore cancellation errors - they're expected when requests are cancelled
         if (orderError.name === 'CanceledError' || orderError.code === 'ERR_CANCELED') {
-          // Silently ignore - this is expected behavior
           return;
         }
         
-        // Only log real errors in development
         if (process.env.NODE_ENV === 'development') {
           console.error('Error fetching orders:', orderError);
         }
@@ -183,13 +216,15 @@ const BackOfficeDashboard = () => {
       }
 
     } catch (error) {
-      console.error('Error fetching data:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching data:', error);
+      }
       toast.error('Failed to fetch dashboard data');
     } finally {
       setLoading(false);
       setLastFetchTime(Date.now());
     }
-  };
+  }, [user, lastFetchTime, formatDate, formatCustomerName]);
 
   const handleCreateQuotation = (inquiry) => {
     setSelectedInquiry(inquiry);
@@ -198,7 +233,6 @@ const BackOfficeDashboard = () => {
 
   const handleQuotationSuccess = (quotation) => {
     toast.success(`Quotation ${quotation.quotationNumber} created successfully!`);
-    // Refresh the inquiries list with force refresh
     fetchData(true);
   };
 
@@ -213,13 +247,14 @@ const BackOfficeDashboard = () => {
       
       if (response.data.success) {
         toast.success('Quotation sent to customer successfully!');
-        // Refresh the quotations list with force refresh
         fetchData(true);
       } else {
         toast.error(response.data.message || 'Failed to send quotation');
       }
     } catch (error) {
-      console.error('Error sending quotation:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error sending quotation:', error);
+      }
       toast.error('Failed to send quotation');
     }
   };
@@ -228,9 +263,6 @@ const BackOfficeDashboard = () => {
     try {
       const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
       const token = localStorage.getItem('token');
-      
-      // Always use API endpoint to avoid 401 errors with Cloudinary
-      // The backend will handle fetching from Cloudinary if needed
       const apiPdfUrl = `${apiBaseUrl}/quotation/${quotation._id}/pdf?download=true`;
       
       const response = await fetch(apiPdfUrl, {
@@ -247,7 +279,6 @@ const BackOfficeDashboard = () => {
           return;
         }
         
-        // Validate PDF header
         const arrayBuffer = await blob.slice(0, 4).arrayBuffer();
         const uint8Array = new Uint8Array(arrayBuffer);
         const pdfHeader = String.fromCharCode(...uint8Array);
@@ -263,7 +294,6 @@ const BackOfficeDashboard = () => {
           return;
         }
         
-        // Create download link
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -284,11 +314,75 @@ const BackOfficeDashboard = () => {
         }
       }
     } catch (error) {
-      console.error('Error downloading PDF:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error downloading PDF:', error);
+      }
       toast.error('Failed to download PDF. Please try again.');
     }
   };
 
+  // Reusable tab button component
+  const TabButton = ({ tab, icon: Icon, label, onClick }) => {
+    const isActive = activeTab === tab;
+    return (
+      <button
+        onClick={onClick}
+        className={`flex items-center space-x-2 px-3 py-2 rounded-md font-medium text-sm transition-all duration-200 ${
+          isActive
+            ? 'bg-green-600 text-white shadow-sm'
+            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 shadow-sm'
+        }`}
+      >
+        <Icon className="h-4 w-4" />
+        <span>{label}</span>
+      </button>
+    );
+  };
+
+  // Reusable stats card component
+  const StatsCard = ({ icon, label, value, loading: cardLoading, iconBgColor = 'bg-blue-100', iconTextColor = 'text-blue-600' }) => (
+    <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4">
+      <div className="flex items-center">
+        <div className="flex-shrink-0">
+          <div className={`w-8 h-8 ${iconBgColor} rounded-lg flex items-center justify-center`}>
+            <span className={`${iconTextColor} text-sm`}>{icon}</span>
+          </div>
+        </div>
+        <div className="ml-3">
+          <p className="text-xs font-medium text-gray-600">{label}</p>
+          {cardLoading ? (
+            <div className="animate-pulse bg-gray-200 h-5 w-10 rounded mt-1"></div>
+          ) : (
+            <p className="text-xl font-bold text-gray-900 mt-0.5">{value}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Reusable scrollable table wrapper
+  const ScrollableTable = ({ children }) => (
+    <div className="overflow-x-auto">
+      <div className="max-h-96 overflow-y-auto" style={{
+        scrollbarWidth: 'thin',
+        scrollbarColor: '#d1d5db #f3f4f6'
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+
+  // Reusable status badge component
+  const StatusBadge = ({ status, type = 'inquiry' }) => (
+    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClasses(status, type)}`}>
+      {formatStatusText(status)}
+    </span>
+  );
+
+  const handleTabChange = useCallback((tab) => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  }, [setSearchParams]);
 
   if (!user) {
     return (
@@ -316,12 +410,10 @@ const BackOfficeDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex relative pt-20">
-      {/* Desktop Sidebar - Always visible, starts exactly below header (80px) - no gap */}
       <div className="hidden lg:block fixed left-0 top-[80px] h-[calc(100vh-80px)] w-64 z-40 shadow-xl bg-white border-r border-gray-200">
         <AdminSidebar />
       </div>
 
-      {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
@@ -329,219 +421,97 @@ const BackOfficeDashboard = () => {
         ></div>
       )}
 
-      {/* Mobile Sidebar */}
       <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed left-0 top-[80px] h-[calc(100vh-80px)] w-64 z-50 transition-transform duration-300 lg:hidden shadow-xl bg-white border-r border-gray-200`}>
         <AdminSidebar onLinkClick={() => setSidebarOpen(false)} />
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 w-full lg:ml-64">
         <div className="w-full py-6 px-4 sm:px-6 lg:px-8">
-          {/* Header */}
           <div className="mb-4 flex justify-between items-center">
-              <div className="flex items-center space-x-4">
-                {/* Mobile Menu Button */}
-                <button
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="lg:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                </button>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">Back Office Dashboard</h1>
-                  <p className="mt-1 text-gray-600 text-sm">Manage inquiries, quotations, and orders</p>
-                </div>
-              </div>
+            <div className="flex items-center space-x-4">
               <button
-                onClick={() => fetchData(true)}
-                disabled={loading}
-                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="lg:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100"
               >
-                <svg className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
-                Refresh
               </button>
-            </div>
-
-          {/* Dashboard Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <span className="text-blue-600 text-sm">📄</span>
-                  </div>
-                </div>
-                <div className="ml-3">
-                  <p className="text-xs font-medium text-gray-600">Total Inquiries</p>
-                  {statsLoading ? (
-                    <div className="animate-pulse bg-gray-200 h-5 w-10 rounded mt-1"></div>
-                  ) : (
-                    <p className="text-xl font-bold text-gray-900 mt-0.5">{dashboardStats.inquiries}</p>
-                  )}
-                </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Back Office Dashboard</h1>
+                <p className="mt-1 text-gray-600 text-sm">Manage inquiries, quotations, and orders</p>
               </div>
             </div>
-
-            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
-                    <span className="text-yellow-600 text-sm">🏷️</span>
-                  </div>
-                </div>
-                <div className="ml-3">
-                  <p className="text-xs font-medium text-gray-600">Quotations</p>
-                  {statsLoading ? (
-                    <div className="animate-pulse bg-gray-200 h-5 w-10 rounded mt-1"></div>
-                  ) : (
-                    <p className="text-xl font-bold text-gray-900 mt-0.5">{dashboardStats.quotations}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                    <span className="text-green-600 text-sm">📦</span>
-                  </div>
-                </div>
-                <div className="ml-3">
-                  <p className="text-xs font-medium text-gray-600">Active Orders</p>
-                  {statsLoading ? (
-                    <div className="animate-pulse bg-gray-200 h-5 w-10 rounded mt-1"></div>
-                  ) : (
-                    <p className="text-xl font-bold text-gray-900 mt-0.5">{dashboardStats.orders}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <span className="text-purple-600 text-sm">✅</span>
-                  </div>
-                </div>
-                <div className="ml-3">
-                  <p className="text-xs font-medium text-gray-600">Completed</p>
-                  {statsLoading ? (
-                    <div className="animate-pulse bg-gray-200 h-5 w-10 rounded mt-1"></div>
-                  ) : (
-                    <p className="text-xl font-bold text-gray-900 mt-0.5">{dashboardStats.completed}</p>
-                  )}
-                </div>
-              </div>
-            </div>
+            <button
+              onClick={() => fetchData(true)}
+              disabled={loading}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <svg className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
           </div>
 
-          {/* Admin Dashboard Navigation Tabs */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <StatsCard icon="📄" label="Total Inquiries" value={dashboardStats.inquiries} loading={statsLoading} iconBgColor="bg-blue-100" iconTextColor="text-blue-600" />
+            <StatsCard icon="🏷️" label="Quotations" value={dashboardStats.quotations} loading={statsLoading} iconBgColor="bg-yellow-100" iconTextColor="text-yellow-600" />
+            <StatsCard icon="📦" label="Active Orders" value={dashboardStats.orders} loading={statsLoading} iconBgColor="bg-green-100" iconTextColor="text-green-600" />
+            <StatsCard icon="✅" label="Completed" value={dashboardStats.completed} loading={statsLoading} iconBgColor="bg-purple-100" iconTextColor="text-purple-600" />
+          </div>
+
           <div className="mb-6">
             <h2 className="text-base font-semibold text-gray-900 mb-3">Admin Dashboard Navigation</h2>
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => {
-                  setActiveTab('inquiries');
-                  setSearchParams({ tab: 'inquiries' });
-                }}
-                className={`flex items-center space-x-2 px-3 py-2 rounded-md font-medium text-sm transition-all duration-200 ${
-                  activeTab === 'inquiries'
-                    ? 'bg-green-600 text-white shadow-sm'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 shadow-sm'
-                }`}
-              >
-                <DocumentTextIcon className="h-4 w-4" />
-                <span>Inquiries</span>
-              </button>
-              
-              <button
-                onClick={() => {
-                  setActiveTab('quotations');
-                  setSearchParams({ tab: 'quotations' });
-                }}
-                className={`flex items-center space-x-2 px-3 py-2 rounded-md font-medium text-sm transition-all duration-200 ${
-                  activeTab === 'quotations'
-                    ? 'bg-green-600 text-white shadow-sm'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 shadow-sm'
-                }`}
-              >
-                <TagIcon className="h-4 w-4" />
-                <span>Quotations</span>
-              </button>
-              
-              <button
-                onClick={() => {
-                  setActiveTab('orders');
-                  setSearchParams({ tab: 'orders' });
-                }}
-                className={`flex items-center space-x-2 px-3 py-2 rounded-md font-medium text-sm transition-all duration-200 ${
-                  activeTab === 'orders'
-                    ? 'bg-green-600 text-white shadow-sm'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 shadow-sm'
-                }`}
-              >
-                <ClipboardDocumentListIcon className="h-4 w-4" />
-                <span>Orders</span>
-              </button>
-              
+              <TabButton
+                tab="inquiries"
+                icon={DocumentTextIcon}
+                label="Inquiries"
+                onClick={() => handleTabChange('inquiries')}
+              />
+              <TabButton
+                tab="quotations"
+                icon={TagIcon}
+                label="Quotations"
+                onClick={() => handleTabChange('quotations')}
+              />
+              <TabButton
+                tab="orders"
+                icon={ClipboardDocumentListIcon}
+                label="Orders"
+                onClick={() => handleTabChange('orders')}
+              />
               {(user?.role === 'admin' || user?.role === 'backoffice') && (
                 <>
-                  <button
-                    onClick={() => {
-                      setActiveTab('material');
-                      setSearchParams({ tab: 'material' });
-                    }}
-                    className={`flex items-center space-x-2 px-3 py-2 rounded-md font-medium text-sm transition-all duration-200 ${
-                      activeTab === 'material'
-                        ? 'bg-green-600 text-white shadow-sm'
-                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 shadow-sm'
-                    }`}
-                  >
-                    <WrenchScrewdriverIcon className="h-4 w-4" />
-                    <span>Material & Thickness Data</span>
-                  </button>
-                  
+                  <TabButton
+                    tab="material"
+                    icon={WrenchScrewdriverIcon}
+                    label="Material & Thickness Data"
+                    onClick={() => handleTabChange('material')}
+                  />
                   {user?.role === 'admin' && (
-                    <button
-                      onClick={() => {
-                        setActiveTab('subadmins');
-                        setSearchParams({ tab: 'subadmins' });
-                      }}
-                      className={`flex items-center space-x-2 px-3 py-2 rounded-md font-medium text-sm transition-all duration-200 ${
-                        activeTab === 'subadmins'
-                          ? 'bg-green-600 text-white shadow-sm'
-                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 shadow-sm'
-                      }`}
-                    >
-                      <UsersIcon className="h-4 w-4" />
-                      <span>Sub-Admins</span>
-                    </button>
+                    <TabButton
+                      tab="subadmins"
+                      icon={UsersIcon}
+                      label="Sub-Admins"
+                      onClick={() => handleTabChange('subadmins')}
+                    />
                   )}
                 </>
               )}
             </div>
           </div>
 
-          {/* Tab Content */}
           {activeTab === 'inquiries' && (
             <div className="bg-white shadow rounded-lg">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h3 className="text-lg font-medium text-gray-900">Pending Inquiries</h3>
                 <p className="text-sm text-gray-600 mt-1">Review and create quotations for customer inquiries</p>
               </div>
-              <div className="overflow-x-auto">
-                <div className="max-h-96 overflow-y-auto" style={{
-                  scrollbarWidth: 'thin',
-                  scrollbarColor: '#d1d5db #f3f4f6'
-                }}>
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
+              <ScrollableTable>
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         INQUIRY
@@ -552,9 +522,6 @@ const BackOfficeDashboard = () => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         TECHNICAL SPECIFICATIONS
                       </th>
-                      {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        FILES
-                      </th> */}
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         STATUS
                       </th>
@@ -565,8 +532,8 @@ const BackOfficeDashboard = () => {
                         ACTIONS
                       </th>
                     </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
                     {pendingInquiries.map((inquiry) => (
                       <tr key={inquiry.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -596,24 +563,8 @@ const BackOfficeDashboard = () => {
                             )}
                           </div>
                         </td>
-                        {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div className="flex items-center">
-                            <svg className="w-4 h-4 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            {inquiry.files} files
-                          </div>
-                        </td> */}
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            inquiry.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            inquiry.status === 'quoted' ? 'bg-green-100 text-green-800' :
-                            inquiry.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                            inquiry.status === 'accepted' ? 'bg-blue-100 text-blue-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {inquiry.status}
-                          </span>
+                          <StatusBadge status={inquiry.status} type="inquiry" />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {inquiry.date}
@@ -645,13 +596,11 @@ const BackOfficeDashboard = () => {
                         </td>
                       </tr>
                     ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                  </tbody>
+                </table>
+              </ScrollableTable>
             </div>
           )}
-
 
           {activeTab === 'quotations' && (
             <div className="bg-white shadow rounded-lg">
@@ -659,13 +608,9 @@ const BackOfficeDashboard = () => {
                 <h3 className="text-lg font-medium text-gray-900">Quotations</h3>
                 <p className="text-sm text-gray-600 mt-1">Manage customer quotations and pricing</p>
               </div>
-              <div className="overflow-x-auto">
-                <div className="max-h-96 overflow-y-auto" style={{
-                  scrollbarWidth: 'thin',
-                  scrollbarColor: '#d1d5db #f3f4f6'
-                }}>
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
+              <ScrollableTable>
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Inquiry ID
@@ -674,7 +619,7 @@ const BackOfficeDashboard = () => {
                         Customer
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Parts
+                        Amount
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
@@ -686,8 +631,8 @@ const BackOfficeDashboard = () => {
                         Actions
                       </th>
                     </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
                     {quotations.map((quotation) => (
                       <tr key={quotation.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -701,47 +646,39 @@ const BackOfficeDashboard = () => {
                           ₹{quotation.amount?.toFixed(2) || '0.00'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            quotation.status === 'draft' ? 'bg-gray-100 text-gray-800' :
-                            quotation.status === 'sent' ? 'bg-yellow-100 text-yellow-800' :
-                            quotation.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                            quotation.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                            'bg-blue-100 text-blue-800'
-                          }`}>
-                            {quotation.status?.charAt(0).toUpperCase() + quotation.status?.slice(1) || 'Unknown'}
-                          </span>
+                          <StatusBadge status={quotation.status} type="quotation" />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {quotation.date}
                         </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
-                              <Link
-                                to={`/quotation/${quotation._id}`}
-                                className="text-green-600 hover:text-green-900 bg-green-50 px-3 py-1 rounded-md text-sm font-medium"
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <Link
+                              to={`/quotation/${quotation._id}`}
+                              className="text-green-600 hover:text-green-900 bg-green-50 px-3 py-1 rounded-md text-sm font-medium"
+                            >
+                              View
+                            </Link>
+                            {quotation.status === 'draft' && (
+                              <button 
+                                onClick={() => handleSendQuotation(quotation._id)}
+                                className="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1 rounded-md text-sm font-medium"
                               >
-                                View
-                              </Link>
-                              {quotation.status === 'draft' && (
-                                <button 
-                                  onClick={() => handleSendQuotation(quotation._id)}
-                                  className="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1 rounded-md text-sm font-medium"
-                                >
-                                  Send
-                                </button>
-                              )}
-                              <button
-                                onClick={() => handleDownloadPDF(quotation)}
-                                className="text-red-600 hover:text-red-900 bg-red-50 px-3 py-1 rounded-md text-sm font-medium flex items-center gap-1"
-                                title="Download PDF"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                PDF
+                                Send
                               </button>
-                            </div>
-                          </td>
+                            )}
+                            <button
+                              onClick={() => handleDownloadPDF(quotation)}
+                              className="text-red-600 hover:text-red-900 bg-red-50 px-3 py-1 rounded-md text-sm font-medium flex items-center gap-1"
+                              title="Download PDF"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              PDF
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                     {quotations.length === 0 && (
@@ -751,10 +688,9 @@ const BackOfficeDashboard = () => {
                         </td>
                       </tr>
                     )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                  </tbody>
+                </table>
+              </ScrollableTable>
             </div>
           )}
 
@@ -764,13 +700,9 @@ const BackOfficeDashboard = () => {
                 <h3 className="text-lg font-medium text-gray-900">Orders</h3>
                 <p className="text-sm text-gray-600 mt-1">Manage production orders and tracking</p>
               </div>
-              <div className="overflow-x-auto">
-                <div className="max-h-96 overflow-y-auto" style={{
-                  scrollbarWidth: 'thin',
-                  scrollbarColor: '#d1d5db #f3f4f6'
-                }}>
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
+              <ScrollableTable>
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Order ID
@@ -791,57 +723,45 @@ const BackOfficeDashboard = () => {
                         Actions
                       </th>
                     </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
                     {orders.map((order) => (
                       <tr key={order.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {order.orderId}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {order.id}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {order.customer}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {order.items}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            order.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
-                            order.status === 'in_production' ? 'bg-purple-100 text-purple-800' :
-                            order.status === 'ready_for_dispatch' ? 'bg-orange-100 text-orange-800' :
-                            order.status === 'dispatched' ? 'bg-indigo-100 text-indigo-800' :
-                            order.status === 'delivered' ? 'bg-green-100 text-green-800' :
-                            order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {order.status?.charAt(0).toUpperCase() + order.status?.slice(1).replace('_', ' ') || 'Unknown'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <StatusBadge status={order.status} type="order" />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {order.date}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <Link
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <Link
                             to={`/order/${order._id}`}
-                          className="text-green-600 hover:text-green-900 bg-green-50 px-3 py-1 rounded-md text-sm font-medium"
-                        >
-                          View
-                        </Link>
-                      </td>
-                    </tr>
+                            className="text-green-600 hover:text-green-900 bg-green-50 px-3 py-1 rounded-md text-sm font-medium"
+                          >
+                            View
+                          </Link>
+                        </td>
+                      </tr>
                     ))}
                     {orders.length === 0 && (
                       <tr>
                         <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
                           No orders found
-                      </td>
-                    </tr>
+                        </td>
+                      </tr>
                     )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                  </tbody>
+                </table>
+              </ScrollableTable>
             </div>
           )}
 
@@ -855,7 +775,6 @@ const BackOfficeDashboard = () => {
         </div>
       </div>
 
-      {/* Quotation Form Modal */}
       {showQuotationForm && selectedInquiry && (
         <QuotationForm
           inquiry={selectedInquiry}

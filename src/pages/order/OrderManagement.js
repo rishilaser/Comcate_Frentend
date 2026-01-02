@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { orderAPI, adminAPI } from '../../services/api';
 import toast from 'react-hot-toast';
@@ -9,29 +9,59 @@ const OrderManagement = () => {
   const [filter, setFilter] = useState('all');
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [showDispatchModal, setShowDispatchModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [deliveryTime, setDeliveryTime] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [dispatchData, setDispatchData] = useState({
     courier: '',
     trackingNumber: '',
     estimatedDelivery: ''
   });
-  const [updatingOrders, setUpdatingOrders] = useState(new Set()); // Track which orders are being updated
+  const [updatingOrders, setUpdatingOrders] = useState(new Set());
+  const deliveryModalRef = useRef(null);
+  const dispatchModalRef = useRef(null);
+  const confirmModalRef = useRef(null);
 
   useEffect(() => {
     fetchOrders();
   }, []);
 
+  // Keyboard navigation for modals
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        if (showDeliveryModal) setShowDeliveryModal(false);
+        if (showDispatchModal) setShowDispatchModal(false);
+        if (showConfirmModal) setShowConfirmModal(false);
+      }
+    };
 
-  const fetchOrders = async () => {
+    if (showDeliveryModal || showDispatchModal || showConfirmModal) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [showDeliveryModal, showDispatchModal, showConfirmModal]);
+
+  // Focus trap for modals
+  useEffect(() => {
+    if (showDeliveryModal && deliveryModalRef.current) {
+      const firstInput = deliveryModalRef.current.querySelector('input');
+      if (firstInput) firstInput.focus();
+    }
+    if (showDispatchModal && dispatchModalRef.current) {
+      const firstInput = dispatchModalRef.current.querySelector('input');
+      if (firstInput) firstInput.focus();
+    }
+  }, [showDeliveryModal, showDispatchModal]);
+
+  const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('Fetching orders from API...'); // Debug log
       const response = await adminAPI.getAllOrders();
-      console.log('API Response:', response); // Debug log
       
       if (response.data.success) {
-        console.log('Fetched orders:', response.data.orders);
         const transformedOrders = response.data.orders.map(order => ({
           id: order._id || order.id,
           orderNumber: order.orderNumber,
@@ -39,7 +69,7 @@ const OrderManagement = () => {
           title: `Order for ${order.parts?.length || 0} parts`,
           status: order.status,
           amount: order.totalAmount,
-          createdAt: new Date(order.createdAt).toISOString().split('T')[0],
+          createdAt: order.createdAt ? (typeof order.createdAt === 'string' ? order.createdAt : new Date(order.createdAt).toISOString().split('T')[0]) : new Date().toISOString().split('T')[0],
           expectedDelivery: order.dispatch?.estimatedDelivery 
             ? new Date(order.dispatch.estimatedDelivery).toISOString().split('T')[0] 
             : order.production?.estimatedCompletion 
@@ -50,17 +80,14 @@ const OrderManagement = () => {
           payment: order.payment,
           dispatch: order.dispatch
         }));
-        console.log('Transformed orders:', transformedOrders);
         setOrders(transformedOrders);
       } else {
         toast.error(response.data.message || 'Failed to fetch orders');
       }
     } catch (error) {
-      // Ignore cancellation errors - they're expected
       if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
         return;
       }
-      // Only log real errors in development
       if (process.env.NODE_ENV === 'development') {
         console.error('Error fetching orders:', error);
       }
@@ -68,9 +95,72 @@ const OrderManagement = () => {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Generic status update handler to reduce code duplication
+  const handleStatusUpdate = useCallback(async (orderId, newStatus, notes, successMessage) => {
+    if (!orderId) {
+      toast.error('Invalid order ID');
+      return;
+    }
+
+    if (updatingOrders.has(orderId)) {
+      return;
+    }
+
+    try {
+      setUpdatingOrders(prev => new Set(prev).add(orderId));
+
+      // Optimistic update
+      setOrders(prevOrders => 
+        prevOrders.map(o => 
+          o.id === orderId ? { ...o, status: newStatus } : o
+        )
+      );
+
+      const response = await adminAPI.updateOrderStatus(orderId, newStatus, { notes });
+
+      if (response.data.success) {
+        toast.success(successMessage);
+        await fetchOrders();
+      } else {
+        await fetchOrders();
+        toast.error(response.data.message || 'Failed to update order status');
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error(`Error updating order status to ${newStatus}:`, error);
+      }
+      await fetchOrders();
+      toast.error(error.response?.data?.message || 'Failed to update order status');
+    } finally {
+      setUpdatingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+    }
+  }, [updatingOrders, fetchOrders]);
+
+  // Validation helper
+  const validateDeliveryDate = (dateString) => {
+    if (!dateString) return { valid: false, message: 'Please select a delivery date' };
+    const selectedDate = new Date(dateString);
+    const now = new Date();
+    if (selectedDate <= now) {
+      return { valid: false, message: 'Delivery date must be in the future' };
+    }
+    return { valid: true };
   };
 
-  // Handler for setting delivery time (Point 5)
+  const validateTrackingNumber = (trackingNumber) => {
+    if (!trackingNumber || trackingNumber.trim().length < 5) {
+      return { valid: false, message: 'Tracking number must be at least 5 characters' };
+    }
+    return { valid: true };
+  };
+
+  // Handler for setting delivery time
   const handleSetDeliveryTime = (order) => {
     setSelectedOrder(order);
     setDeliveryTime('');
@@ -83,236 +173,124 @@ const OrderManagement = () => {
       return;
     }
 
-    try {
-      const orderId = selectedOrder.id;
-      if (!orderId) {
-        toast.error('Invalid order ID');
+    if (!selectedOrder || !selectedOrder.id) {
+      toast.error('Invalid order selected');
+      setShowDeliveryModal(false);
         return;
       }
 
-      console.log('Setting delivery time with data:', {
-        orderId: orderId,
-        deliveryTime: deliveryTime
-      });
+    const validation = validateDeliveryDate(deliveryTime);
+    if (!validation.valid) {
+      toast.error(validation.message);
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const orderId = selectedOrder.id;
       
       const response = await adminAPI.updateDeliveryDetails(orderId, {
         estimatedDelivery: deliveryTime,
         notes: 'Production started with estimated delivery time'
       });
-      console.log('Delivery time response:', response);
 
       if (response.data.success) {
         toast.success('Delivery time set and customer notified');
         setShowDeliveryModal(false);
-        fetchOrders(); // Refresh orders
+        setDeliveryTime('');
+        await fetchOrders();
       } else {
         toast.error(response.data.message || 'Failed to set delivery time');
       }
     } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
       console.error('Error setting delivery time:', error);
-      console.error('Error details:', error.response?.data);
+      }
       toast.error('Failed to set delivery time');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   // Handler for confirming order
   const handleConfirmOrder = async (order, event) => {
-    // Prevent default and stop propagation
     if (event) {
       event.preventDefault();
       event.stopPropagation();
     }
 
-    // Get order ID - only use order.id
     const orderId = order.id;
     if (!orderId) {
       toast.error('Invalid order ID');
       return;
     }
 
-    // Check if order is already confirmed
     if (order.status === 'confirmed') {
       toast.info('Order is already confirmed');
       return;
     }
 
-    // Prevent multiple clicks
-    if (updatingOrders.has(orderId)) {
-      return;
-    }
-
-    try {
-      // Add to updating set immediately
-      setUpdatingOrders(prev => new Set(prev).add(orderId));
-
-      // Optimistic update - immediately update UI
-      setOrders(prevOrders => 
-        prevOrders.map(o => {
-          return o.id === orderId ? { ...o, status: 'confirmed' } : o;
-        })
-      );
-
-      const response = await adminAPI.updateOrderStatus(orderId, 'confirmed', {
-        notes: 'Order confirmed and ready for production'
-      });
-
-      if (response.data.success) {
-        toast.success('Order confirmed successfully');
-        // Refresh orders to get latest data from server
-        await fetchOrders();
-      } else {
-        // Revert optimistic update on error
-        await fetchOrders();
-        toast.error(response.data.message || 'Failed to confirm order');
-      }
-    } catch (error) {
-      console.error('Error confirming order:', error);
-      console.error('Error details:', error.response?.data);
-      // Revert optimistic update on error
-      await fetchOrders();
-      toast.error(error.response?.data?.message || 'Failed to confirm order');
-    } finally {
-      // Remove from updating set
-      setUpdatingOrders(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(orderId);
-        return newSet;
-      });
-    }
+    await handleStatusUpdate(
+      orderId,
+      'confirmed',
+      'Order confirmed and ready for production',
+      'Order confirmed successfully'
+    );
   };
 
   // Handler for starting production
   const handleStartProduction = async (order, event) => {
-    // Prevent default and stop propagation
     if (event) {
       event.preventDefault();
       event.stopPropagation();
     }
 
-    // Get order ID - only use order.id
     const orderId = order.id;
     if (!orderId) {
       toast.error('Invalid order ID');
       return;
     }
 
-    // Check if order is already in production
     if (order.status === 'in_production') {
       toast.info('Production has already started for this order');
       return;
     }
 
-    // Prevent multiple clicks
-    if (updatingOrders.has(orderId)) {
-      return;
-    }
-
-    try {
-      // Add to updating set immediately
-      setUpdatingOrders(prev => new Set(prev).add(orderId));
-
-      // Optimistic update - immediately update UI
-      setOrders(prevOrders => 
-        prevOrders.map(o => {
-          return o.id === orderId ? { ...o, status: 'in_production' } : o;
-        })
-      );
-
-      const response = await adminAPI.updateOrderStatus(orderId, 'in_production', {
-        notes: 'Production started for this order'
-      });
-
-      if (response.data.success) {
-        toast.success('Production started for order');
-        // Refresh orders to get latest data from server
-        await fetchOrders();
-      } else {
-        // Revert optimistic update on error
-        await fetchOrders();
-        toast.error(response.data.message || 'Failed to start production');
-      }
-    } catch (error) {
-      console.error('Error starting production:', error);
-      console.error('Error details:', error.response?.data);
-      // Revert optimistic update on error
-      await fetchOrders();
-      toast.error(error.response?.data?.message || 'Failed to start production');
-    } finally {
-      // Remove from updating set
-      setUpdatingOrders(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(orderId);
-        return newSet;
-      });
-    }
+    await handleStatusUpdate(
+      orderId,
+      'in_production',
+      'Production started for this order',
+      'Production started for order'
+    );
   };
 
   // Handler for marking order ready for dispatch
   const handleMarkReadyForDispatch = async (order, event) => {
-    // Prevent default and stop propagation
     if (event) {
       event.preventDefault();
       event.stopPropagation();
     }
 
-    // Get order ID - only use order.id
     const orderId = order.id;
     if (!orderId) {
       toast.error('Invalid order ID');
       return;
     }
 
-    // Check if order is already ready for dispatch
     if (order.status === 'ready_for_dispatch') {
       toast.info('Order is already ready for dispatch');
       return;
     }
 
-    // Prevent multiple clicks
-    if (updatingOrders.has(orderId)) {
-      return;
-    }
-
-    try {
-      // Add to updating set immediately
-      setUpdatingOrders(prev => new Set(prev).add(orderId));
-
-      // Optimistic update - immediately update UI
-      setOrders(prevOrders => 
-        prevOrders.map(o => {
-          return o.id === orderId ? { ...o, status: 'ready_for_dispatch' } : o;
-        })
-      );
-
-      const response = await adminAPI.updateOrderStatus(orderId, 'ready_for_dispatch', {
-        notes: 'Order completed and ready for dispatch'
-      });
-
-      if (response.data.success) {
-        toast.success('Order marked as ready for dispatch');
-        // Refresh orders to get latest data from server
-        await fetchOrders();
-      } else {
-        // Revert optimistic update on error
-        await fetchOrders();
-        toast.error(response.data.message || 'Failed to update order status');
-      }
-    } catch (error) {
-      console.error('Error updating order status:', error);
-      // Revert optimistic update on error
-      await fetchOrders();
-      toast.error(error.response?.data?.message || 'Failed to update order status');
-    } finally {
-      // Remove from updating set
-      setUpdatingOrders(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(orderId);
-        return newSet;
-      });
-    }
+    await handleStatusUpdate(
+      orderId,
+      'ready_for_dispatch',
+      'Order completed and ready for dispatch',
+      'Order marked as ready for dispatch'
+    );
   };
 
-  // Handler for dispatching order (Point 6)
+  // Handler for dispatching order
   const handleDispatchOrder = (order) => {
     setSelectedOrder(order);
     setDispatchData({
@@ -329,94 +307,79 @@ const OrderManagement = () => {
       return;
     }
 
-    try {
-      const orderId = selectedOrder.id;
-      if (!orderId) {
-        toast.error('Invalid order ID');
+    if (!selectedOrder || !selectedOrder.id) {
+      toast.error('Invalid order selected');
+      setShowDispatchModal(false);
         return;
       }
 
-      console.log('Dispatching order with data:', {
-        orderId: orderId,
-        dispatchData: dispatchData
-      });
+    const courierValidation = dispatchData.courier.trim().length >= 2;
+    if (!courierValidation) {
+      toast.error('Courier name must be at least 2 characters');
+      return;
+    }
+
+    const trackingValidation = validateTrackingNumber(dispatchData.trackingNumber);
+    if (!trackingValidation.valid) {
+      toast.error(trackingValidation.message);
+      return;
+    }
+
+    if (dispatchData.estimatedDelivery) {
+      const dateValidation = validateDeliveryDate(dispatchData.estimatedDelivery);
+      if (!dateValidation.valid) {
+        toast.error(dateValidation.message);
+        return;
+      }
+    }
+
+    try {
+      setSubmitting(true);
+      const orderId = selectedOrder.id;
       
       const response = await adminAPI.updateDispatchDetails(orderId, dispatchData);
-      console.log('Dispatch response:', response);
 
       if (response.data.success) {
         toast.success('Order dispatched and customer notified');
         setShowDispatchModal(false);
+        setDispatchData({ courier: '', trackingNumber: '', estimatedDelivery: '' });
         
-        // Optimistic update - set status to dispatched
+        // Optimistic update
         setOrders(prevOrders => 
           prevOrders.map(o => 
             o.id === orderId ? { ...o, status: 'dispatched' } : o
           )
         );
         
-        fetchOrders(); // Refresh orders
+        await fetchOrders();
       } else {
         toast.error(response.data.message || 'Failed to dispatch order');
       }
     } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
       console.error('Error dispatching order:', error);
-      console.error('Error details:', error.response?.data);
+      }
       toast.error('Failed to dispatch order');
+      await fetchOrders();
+    } finally {
+      setSubmitting(false);
     }
   };
 
   // Handler for marking order as delivered
   const handleMarkDelivered = async (order) => {
-    // Get order ID - only use order.id
     const orderId = order.id;
     if (!orderId) {
       toast.error('Invalid order ID');
       return;
     }
 
-    // Prevent multiple clicks
-    if (updatingOrders.has(orderId)) {
-      return;
-    }
-
-    try {
-      // Add to updating set
-      setUpdatingOrders(prev => new Set(prev).add(orderId));
-
-      // Optimistic update - immediately update UI
-      setOrders(prevOrders => 
-        prevOrders.map(o => 
-          o.id === orderId ? { ...o, status: 'delivered' } : o
-        )
-      );
-
-      const response = await adminAPI.updateOrderStatus(orderId, 'delivered', {
-        notes: 'Order delivered successfully'
-      });
-
-      if (response.data.success) {
-        toast.success('Order marked as delivered');
-        // Refresh orders to get latest data from server
-        await fetchOrders();
-      } else {
-        // Revert optimistic update on error
-        await fetchOrders();
-        toast.error(response.data.message || 'Failed to update order status');
-      }
-    } catch (error) {
-      console.error('Error updating order status:', error);
-      // Revert optimistic update on error
-      await fetchOrders();
-      toast.error(error.response?.data?.message || 'Failed to update order status');
-    } finally {
-      // Remove from updating set
-      setUpdatingOrders(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(orderId);
-        return newSet;
-      });
-    }
+    await handleStatusUpdate(
+      orderId,
+      'delivered',
+      'Order delivered successfully',
+      'Order marked as delivered'
+    );
   };
 
   const getStatusColor = (status) => {
@@ -494,7 +457,6 @@ const OrderManagement = () => {
     ? orders 
     : orders.filter(order => order.status === filter);
 
-  // Get status counts for indicators
   const getStatusCount = (status) => {
     return orders.filter(order => order.status === status).length;
   };
@@ -503,7 +465,7 @@ const OrderManagement = () => {
     return (
       <div className="w-full py-6 px-4 sm:px-6 lg:px-8">
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" aria-label="Loading orders"></div>
         </div>
       </div>
     );
@@ -518,168 +480,7 @@ const OrderManagement = () => {
           <p className="text-gray-600">Manage and track all customer orders</p>
         </div>
 
-        {/* Order Workflow Guide */}
-        {/* <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-blue-900 mb-3">Order Workflow Guide</h3>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <div className="flex items-center gap-1">
-              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded">Pending</span>
-              <span className="text-blue-600">→</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">Confirmed</span>
-              <span className="text-blue-600">→</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded">In Production</span>
-              <span className="text-blue-600">→</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded">Ready for Dispatch</span>
-              <span className="text-blue-600">→</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded">Dispatched</span>
-              <span className="text-blue-600">→</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="px-2 py-1 bg-green-100 text-green-800 rounded">Delivered</span>
-            </div>
-          </div>
-          <p className="text-xs text-blue-700 mt-2">
-            Use the action buttons in each row to move orders through the workflow stages.
-          </p>
-        </div> */}
-
-        {/* Order Status Summary */}
-        {/* <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-7">
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-gray-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm font-bold">{orders.length}</span>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Total Orders</dt>
-                    <dd className="text-lg font-medium text-gray-900">{orders.length}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm font-bold">{getStatusCount('pending')}</span>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Pending</dt>
-                    <dd className="text-lg font-medium text-gray-900">{getStatusCount('pending')}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm font-bold">{getStatusCount('confirmed')}</span>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Confirmed</dt>
-                    <dd className="text-lg font-medium text-gray-900">{getStatusCount('confirmed')}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm font-bold">{getStatusCount('in_production')}</span>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">In Production</dt>
-                    <dd className="text-lg font-medium text-gray-900">{getStatusCount('in_production')}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm font-bold">{getStatusCount('ready_for_dispatch')}</span>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Ready</dt>
-                    <dd className="text-lg font-medium text-gray-900">{getStatusCount('ready_for_dispatch')}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm font-bold">{getStatusCount('dispatched')}</span>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Dispatched</dt>
-                    <dd className="text-lg font-medium text-gray-900">{getStatusCount('dispatched')}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm font-bold">{getStatusCount('delivered')}</span>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Delivered</dt>
-                    <dd className="text-lg font-medium text-gray-900">{getStatusCount('delivered')}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div> */}
-
+        {/* Filter Buttons */}
         <div className="mt-6">
           <div className="flex flex-wrap gap-3">
             <button
@@ -689,6 +490,7 @@ const OrderManagement = () => {
                   ? getFilterButtonColor('all').active
                   : getFilterButtonColor('all').inactive
               }`}
+              aria-label="Show all orders"
             >
               <span>All Orders</span>
               <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -704,6 +506,7 @@ const OrderManagement = () => {
                   ? getFilterButtonColor('pending').active
                   : getFilterButtonColor('pending').inactive
               }`}
+              aria-label="Show pending orders"
             >
               <span>Pending</span>
               <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -719,6 +522,7 @@ const OrderManagement = () => {
                   ? getFilterButtonColor('confirmed').active
                   : getFilterButtonColor('confirmed').inactive
               }`}
+              aria-label="Show confirmed orders"
             >
               <span>Confirmed</span>
               <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -734,6 +538,7 @@ const OrderManagement = () => {
                   ? getFilterButtonColor('in_production').active
                   : getFilterButtonColor('in_production').inactive
               }`}
+              aria-label="Show orders in production"
             >
               <span>In Production</span>
               <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -749,6 +554,7 @@ const OrderManagement = () => {
                   ? getFilterButtonColor('ready_for_dispatch').active
                   : getFilterButtonColor('ready_for_dispatch').inactive
               }`}
+              aria-label="Show orders ready for dispatch"
             >
               <span>Ready for Dispatch</span>
               <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -764,6 +570,7 @@ const OrderManagement = () => {
                   ? getFilterButtonColor('dispatched').active
                   : getFilterButtonColor('dispatched').inactive
               }`}
+              aria-label="Show dispatched orders"
             >
               <span>Dispatched</span>
               <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -779,6 +586,7 @@ const OrderManagement = () => {
                   ? getFilterButtonColor('delivered').active
                   : getFilterButtonColor('delivered').inactive
               }`}
+              aria-label="Show delivered orders"
             >
               <span>Delivered</span>
               <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -790,11 +598,12 @@ const OrderManagement = () => {
           </div>
         </div>
 
+        {/* Orders Table */}
         <div className="mt-6">
           <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
             <div className="order-table-horizontal-scroll overflow-x-auto">
               <div className="max-h-[500px] overflow-y-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+                <table className="min-w-full divide-y divide-gray-200" role="table" aria-label="Orders table">
                     <thead className="bg-gray-100 sticky top-0 z-10">
                       <tr>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
@@ -823,18 +632,14 @@ const OrderManagement = () => {
                     <tbody className="bg-white divide-y divide-gray-100">
                     {filteredOrders.map((order) => (
                       <tr key={order.id} className="hover:bg-gray-50 transition-colors" onClick={(e) => {
-                        // Prevent row click from interfering with button clicks
-                        // On desktop, ensure button clicks are properly handled
                         const target = e.target;
                         const isButton = target.tagName === 'BUTTON' || target.closest('button');
                         const isLink = target.tagName === 'A' || target.closest('a');
                         const isInput = target.tagName === 'INPUT' || target.closest('input');
                         
                         if (isButton || isLink || isInput) {
-                          // Let button/link handle the click
                           return;
                         }
-                        // Optional: Add row click handler if needed (e.g., navigate to order detail)
                       }}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-semibold text-gray-900">
@@ -848,39 +653,39 @@ const OrderManagement = () => {
                           {order.customerName}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${getStatusColor(order.status)}`}>
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${getStatusColor(order.status)}`} role="status" aria-label={`Order status: ${order.status}`}>
                             {order.status === 'pending' && (
-                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                               </svg>
                             )}
                             {order.status === 'confirmed' && (
-                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                 <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                               </svg>
                             )}
                             {order.status === 'in_production' && (
-                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                 <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
                               </svg>
                             )}
                             {order.status === 'ready_for_dispatch' && (
-                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
                               </svg>
                             )}
                             {order.status === 'dispatched' && (
-                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                 <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
                               </svg>
                             )}
                             {order.status === 'delivered' && (
-                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                               </svg>
                             )}
                             {order.status === 'cancelled' && (
-                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                               </svg>
                             )}
@@ -893,17 +698,31 @@ const OrderManagement = () => {
                           ₹{order.amount?.toFixed(2) || '0.00'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                          {new Date(order.createdAt).toLocaleDateString()}
+                          {order.createdAt ? (typeof order.createdAt === 'string' ? new Date(order.createdAt).toLocaleDateString() : order.createdAt) : 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                          {order.expectedDelivery === 'TBD' ? <span className="text-gray-400">TBD</span> : new Date(order.expectedDelivery).toLocaleDateString()}
+                          {order.expectedDelivery === 'TBD' ? (
+                            <span className="text-gray-400">TBD</span>
+                          ) : order.expectedDelivery ? (
+                            (() => {
+                              try {
+                                const date = new Date(order.expectedDelivery);
+                                return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleDateString();
+                              } catch {
+                                return 'Invalid Date';
+                              }
+                            })()
+                          ) : (
+                            'N/A'
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
                           <div className="flex items-center justify-end space-x-2 relative z-10">
                             <Link
                               to={`/order/${order.id}`}
                               className="px-3 py-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors relative z-10"
-                              onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                              onClick={(e) => { e.stopPropagation(); }}
+                              aria-label={`View order ${order.orderNumber}`}
                             >
                               View
                             </Link>
@@ -917,6 +736,7 @@ const OrderManagement = () => {
                                     updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'
                                   }`}
                                   style={{ pointerEvents: updatingOrders.has(order.id) ? 'none' : 'auto' }}
+                                  aria-label={`Confirm order ${order.orderNumber}`}
                                 >
                                   {updatingOrders.has(order.id) ? 'Updating...' : 'Confirm'}
                                 </button>
@@ -928,6 +748,7 @@ const OrderManagement = () => {
                                     handleSetDeliveryTime(order); 
                                   }}
                                   className="px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors relative z-10 cursor-pointer"
+                                  aria-label={`Set delivery time for order ${order.orderNumber}`}
                                 >
                                   Set Delivery
                                 </button>
@@ -943,6 +764,7 @@ const OrderManagement = () => {
                                     updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'
                                   }`}
                                   style={{ pointerEvents: updatingOrders.has(order.id) ? 'none' : 'auto' }}
+                                  aria-label={`Start production for order ${order.orderNumber}`}
                                 >
                                   {updatingOrders.has(order.id) ? 'Updating...' : 'Start Production'}
                                 </button>
@@ -954,6 +776,7 @@ const OrderManagement = () => {
                                     handleSetDeliveryTime(order); 
                                   }}
                                   className="px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors relative z-10 cursor-pointer"
+                                  aria-label={`Set delivery time for order ${order.orderNumber}`}
                                 >
                                   Set Delivery
                                 </button>
@@ -969,6 +792,7 @@ const OrderManagement = () => {
                                     updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'
                                   }`}
                                   style={{ pointerEvents: updatingOrders.has(order.id) ? 'none' : 'auto' }}
+                                  aria-label={`Mark order ${order.orderNumber} as ready for dispatch`}
                                 >
                                   {updatingOrders.has(order.id) ? 'Updating...' : 'Ready'}
                                 </button>
@@ -980,6 +804,7 @@ const OrderManagement = () => {
                                     handleSetDeliveryTime(order); 
                                   }}
                                   className="px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors relative z-10 cursor-pointer"
+                                  aria-label={`Update delivery time for order ${order.orderNumber}`}
                                 >
                                   Update
                                 </button>
@@ -994,6 +819,7 @@ const OrderManagement = () => {
                                   handleDispatchOrder(order); 
                                 }}
                                 className="px-3 py-1.5 text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 rounded-md transition-colors relative z-10 cursor-pointer"
+                                aria-label={`Dispatch order ${order.orderNumber}`}
                               >
                                 Dispatch
                               </button>
@@ -1011,6 +837,7 @@ const OrderManagement = () => {
                                   updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'
                                 }`}
                                 style={{ pointerEvents: updatingOrders.has(order.id) ? 'none' : 'auto' }}
+                                aria-label={`Mark order ${order.orderNumber} as delivered`}
                               >
                                 {updatingOrders.has(order.id) ? 'Updating...' : 'Mark Delivered'}
                               </button>
@@ -1028,7 +855,7 @@ const OrderManagement = () => {
 
         {filteredOrders.length === 0 && (
           <div className="text-center py-16 bg-white border border-gray-200 rounded-lg">
-            <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No orders found</h3>
@@ -1039,36 +866,68 @@ const OrderManagement = () => {
 
       {/* Delivery Time Modal */}
       {showDeliveryModal && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div 
+          className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowDeliveryModal(false);
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delivery-modal-title"
+        >
+          <div 
+            ref={deliveryModalRef}
+            className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white"
+            onClick={(e) => e.stopPropagation()}
+          >
               <div className="mt-3">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">
+              <h3 id="delivery-modal-title" className="text-lg font-medium text-gray-900 mb-4">
                   Set Delivery Time - {selectedOrder?.orderNumber}
                 </h3>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Estimated Delivery Date
+                <label htmlFor="delivery-time-input" className="block text-sm font-medium text-gray-700 mb-2">
+                  Estimated Delivery Date *
                   </label>
                   <input
+                  id="delivery-time-input"
                     type="datetime-local"
                     value={deliveryTime}
                     onChange={(e) => setDeliveryTime(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
+                  disabled={submitting}
+                  aria-required="true"
                   />
                 </div>
                 <div className="flex justify-end space-x-3">
                   <button
-                    onClick={() => setShowDeliveryModal(false)}
-                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                  onClick={() => {
+                    setShowDeliveryModal(false);
+                    setDeliveryTime('');
+                  }}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 disabled:opacity-50"
+                  disabled={submitting}
+                  aria-label="Cancel setting delivery time"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleSubmitDeliveryTime}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  >
-                    Set Delivery Time
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                  disabled={submitting}
+                  aria-label="Set delivery time"
+                >
+                  {submitting ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Setting...
+                    </>
+                  ) : (
+                    'Set Delivery Time'
+                  )}
                   </button>
                 </div>
               </div>
@@ -1078,63 +937,100 @@ const OrderManagement = () => {
 
         {/* Dispatch Modal */}
         {showDispatchModal && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div 
+          className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowDispatchModal(false);
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dispatch-modal-title"
+        >
+          <div 
+            ref={dispatchModalRef}
+            className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white"
+            onClick={(e) => e.stopPropagation()}
+          >
               <div className="mt-3">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">
+              <h3 id="dispatch-modal-title" className="text-lg font-medium text-gray-900 mb-4">
                   Dispatch Order - {selectedOrder?.orderNumber}
                 </h3>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="courier-input" className="block text-sm font-medium text-gray-700 mb-2">
                       Courier Name *
                     </label>
                     <input
+                    id="courier-input"
                       type="text"
                       value={dispatchData.courier}
                       onChange={(e) => setDispatchData({...dispatchData, courier: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., FedEx, UPS, DHL"
                       required
+                    disabled={submitting}
+                    aria-required="true"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="tracking-input" className="block text-sm font-medium text-gray-700 mb-2">
                       Tracking Number *
                     </label>
                     <input
+                    id="tracking-input"
                       type="text"
                       value={dispatchData.trackingNumber}
                       onChange={(e) => setDispatchData({...dispatchData, trackingNumber: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., 1Z999AA1234567890"
                       required
+                    disabled={submitting}
+                    aria-required="true"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="dispatch-delivery-input" className="block text-sm font-medium text-gray-700 mb-2">
                       Estimated Delivery Date
                     </label>
                     <input
+                    id="dispatch-delivery-input"
                       type="datetime-local"
                       value={dispatchData.estimatedDelivery}
                       onChange={(e) => setDispatchData({...dispatchData, estimatedDelivery: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={submitting}
                     />
                   </div>
                 </div>
                 <div className="flex justify-end space-x-3 mt-6">
                   <button
-                    onClick={() => setShowDispatchModal(false)}
-                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                  onClick={() => {
+                    setShowDispatchModal(false);
+                    setDispatchData({ courier: '', trackingNumber: '', estimatedDelivery: '' });
+                  }}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 disabled:opacity-50"
+                  disabled={submitting}
+                  aria-label="Cancel dispatch"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleSubmitDispatch}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-                  >
-                    Dispatch Order
+                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 flex items-center"
+                  disabled={submitting}
+                  aria-label="Dispatch order"
+                >
+                  {submitting ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Dispatching...
+                    </>
+                  ) : (
+                    'Dispatch Order'
+                  )}
                   </button>
                 </div>
               </div>
@@ -1146,4 +1042,3 @@ const OrderManagement = () => {
 };
 
 export default OrderManagement;
-
