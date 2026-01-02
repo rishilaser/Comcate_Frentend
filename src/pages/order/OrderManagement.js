@@ -97,6 +97,13 @@ const OrderManagement = () => {
     }
   }, []);
 
+  // Helper function for efficient ID matching
+  const matchesOrderId = useCallback((order, orderId) => {
+    const id = String(orderId);
+    return order.id === id || order.id === orderId || 
+           order._id === id || order._id === orderId;
+  }, []);
+
   // Generic status update handler to reduce code duplication
   const handleStatusUpdate = useCallback(async (orderId, newStatus, notes, successMessage) => {
     if (!orderId) {
@@ -111,19 +118,34 @@ const OrderManagement = () => {
     try {
       setUpdatingOrders(prev => new Set(prev).add(orderId));
 
-      // Optimistic update
+      // Optimistic update - immediately update the status and show success toast
+      // This gives instant feedback to the user
       setOrders(prevOrders => 
         prevOrders.map(o => 
-          o.id === orderId ? { ...o, status: newStatus } : o
+          matchesOrderId(o, orderId) ? { ...o, status: newStatus } : o
         )
       );
+      
+      // Show success toast immediately for better UX
+      toast.success(successMessage);
 
+      // Make API call in background (non-blocking)
       const response = await adminAPI.updateOrderStatus(orderId, newStatus, { notes });
 
       if (response.data.success) {
-        toast.success(successMessage);
-        await fetchOrders();
+        // Get updated status from response
+        const updatedStatus = response.data.order?.status || response.data.status || newStatus;
+        
+        // Only update if status is different (optimization - avoid unnecessary re-render)
+        if (updatedStatus !== newStatus) {
+          setOrders(prevOrders => 
+            prevOrders.map(o => 
+              matchesOrderId(o, orderId) ? { ...o, status: updatedStatus } : o
+            )
+          );
+        }
       } else {
+        // On failure, revert optimistic update by refetching
         await fetchOrders();
         toast.error(response.data.message || 'Failed to update order status');
       }
@@ -131,6 +153,7 @@ const OrderManagement = () => {
       if (process.env.NODE_ENV === 'development') {
         console.error(`Error updating order status to ${newStatus}:`, error);
       }
+      // On error, revert optimistic update by refetching
       await fetchOrders();
       toast.error(error.response?.data?.message || 'Failed to update order status');
     } finally {
@@ -140,7 +163,7 @@ const OrderManagement = () => {
         return newSet;
       });
     }
-  }, [updatingOrders, fetchOrders]);
+  }, [updatingOrders, fetchOrders, matchesOrderId]);
 
   // Validation helper
   const validateDeliveryDate = (dateString) => {
@@ -212,84 +235,105 @@ const OrderManagement = () => {
     }
   };
 
-  // Handler for confirming order
-  const handleConfirmOrder = async (order, event) => {
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
+  const getOrderId = (order) => order?.id || order?._id;
 
-    const orderId = order.id;
+  // Confirm Order
+  const handleConfirmOrder = async (order, event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+  
+    const orderId = getOrderId(order);
     if (!orderId) {
       toast.error('Invalid order ID');
       return;
     }
-
+  
     if (order.status === 'confirmed') {
       toast.info('Order is already confirmed');
       return;
     }
-
-    await handleStatusUpdate(
-      orderId,
-      'confirmed',
-      'Order confirmed and ready for production',
-      'Order confirmed successfully'
-    );
+  
+    try {
+      await handleStatusUpdate(
+        orderId,
+        'confirmed',
+        'Order confirmed and ready for production',
+        'Order confirmed successfully'
+      );
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to confirm order');
+    }
   };
-
-  // Handler for starting production
+  
+  // Start Production
   const handleStartProduction = async (order, event) => {
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-
-    const orderId = order.id;
+    event?.preventDefault();
+    event?.stopPropagation();
+  
+    const orderId = getOrderId(order);
     if (!orderId) {
       toast.error('Invalid order ID');
       return;
     }
-
+  
+    if (order.status !== 'confirmed') {
+      toast.warning('Please confirm the order before starting production');
+      return;
+    }
+  
     if (order.status === 'in_production') {
-      toast.info('Production has already started for this order');
+      toast.info('Production has already started');
       return;
     }
-
-    await handleStatusUpdate(
-      orderId,
-      'in_production',
-      'Production started for this order',
-      'Production started for order'
-    );
-  };
-
-  // Handler for marking order ready for dispatch
-  const handleMarkReadyForDispatch = async (order, event) => {
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
+  
+    try {
+      await handleStatusUpdate(
+        orderId,
+        'in_production',
+        'Production started for this order',
+        'Production started successfully'
+      );
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to start production');
     }
-
-    const orderId = order.id;
+  };
+  
+  // Ready for Dispatch
+  const handleMarkReadyForDispatch = async (order, event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+  
+    const orderId = getOrderId(order);
     if (!orderId) {
       toast.error('Invalid order ID');
       return;
     }
-
+  
+    if (order.status !== 'in_production') {
+      toast.warning('Order must be in production before dispatch');
+      return;
+    }
+  
     if (order.status === 'ready_for_dispatch') {
       toast.info('Order is already ready for dispatch');
       return;
     }
-
-    await handleStatusUpdate(
-      orderId,
-      'ready_for_dispatch',
-      'Order completed and ready for dispatch',
-      'Order marked as ready for dispatch'
-    );
+  
+    try {
+      await handleStatusUpdate(
+        orderId,
+        'ready_for_dispatch',
+        'Order completed and ready for dispatch',
+        'Order marked as ready for dispatch'
+      );
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to mark order for dispatch');
+    }
   };
-
+  
   // Handler for dispatching order
   const handleDispatchOrder = (order) => {
     setSelectedOrder(order);
@@ -730,12 +774,15 @@ const OrderManagement = () => {
                               <>
                                 <button
                                   type="button"
-                                  onClick={(e) => handleConfirmOrder(order, e)}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleConfirmOrder(order, e);
+                                  }}
                                   disabled={updatingOrders.has(order.id)}
-                                  className={`px-3 py-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors relative z-10 ${
-                                    updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'
+                                  className={`px-3 py-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors relative z-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                                    updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                                   }`}
-                                  style={{ pointerEvents: updatingOrders.has(order.id) ? 'none' : 'auto' }}
                                   aria-label={`Confirm order ${order.orderNumber}`}
                                 >
                                   {updatingOrders.has(order.id) ? 'Updating...' : 'Confirm'}
@@ -758,12 +805,15 @@ const OrderManagement = () => {
                               <>
                                 <button
                                   type="button"
-                                  onClick={(e) => handleStartProduction(order, e)}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleStartProduction(order, e);
+                                  }}
                                   disabled={updatingOrders.has(order.id)}
-                                  className={`px-3 py-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-md transition-colors relative z-10 ${
-                                    updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'
+                                  className={`px-3 py-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-md transition-colors relative z-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                                    updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                                   }`}
-                                  style={{ pointerEvents: updatingOrders.has(order.id) ? 'none' : 'auto' }}
                                   aria-label={`Start production for order ${order.orderNumber}`}
                                 >
                                   {updatingOrders.has(order.id) ? 'Updating...' : 'Start Production'}
@@ -786,12 +836,15 @@ const OrderManagement = () => {
                               <>
                                 <button
                                   type="button"
-                                  onClick={(e) => handleMarkReadyForDispatch(order, e)}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleMarkReadyForDispatch(order, e);
+                                  }}
                                   disabled={updatingOrders.has(order.id)}
-                                  className={`px-3 py-1.5 text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-md transition-colors relative z-10 ${
-                                    updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'
+                                  className={`px-3 py-1.5 text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-md transition-colors relative z-10 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${
+                                    updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                                   }`}
-                                  style={{ pointerEvents: updatingOrders.has(order.id) ? 'none' : 'auto' }}
                                   aria-label={`Mark order ${order.orderNumber} as ready for dispatch`}
                                 >
                                   {updatingOrders.has(order.id) ? 'Updating...' : 'Ready'}
@@ -833,10 +886,9 @@ const OrderManagement = () => {
                                   handleMarkDelivered(order); 
                                 }}
                                 disabled={updatingOrders.has(order.id)}
-                                className={`px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors relative z-10 ${
-                                  updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'
+                                className={`px-3 py-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors relative z-10 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
+                                  updatingOrders.has(order.id) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                                 }`}
-                                style={{ pointerEvents: updatingOrders.has(order.id) ? 'none' : 'auto' }}
                                 aria-label={`Mark order ${order.orderNumber} as delivered`}
                               >
                                 {updatingOrders.has(order.id) ? 'Updating...' : 'Mark Delivered'}
