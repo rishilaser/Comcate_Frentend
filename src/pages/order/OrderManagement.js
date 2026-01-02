@@ -165,15 +165,36 @@ const OrderManagement = () => {
     }
   }, [updatingOrders, fetchOrders, matchesOrderId]);
 
-  // Validation helper
+  // Validation helper - ensures date is from current date onwards (no past dates)
   const validateDeliveryDate = (dateString) => {
     if (!dateString) return { valid: false, message: 'Please select a delivery date' };
+    
+    // Check if dateString is valid
     const selectedDate = new Date(dateString);
-    const now = new Date();
-    if (selectedDate <= now) {
-      return { valid: false, message: 'Delivery date must be in the future' };
+    if (isNaN(selectedDate.getTime())) {
+      return { valid: false, message: 'Invalid date format. Please select a valid date.' };
     }
+    
+    const now = new Date();
+    // For datetime-local, compare with current date and time (not just date)
+    // This ensures past dates/times are rejected
+    if (selectedDate < now) {
+      return { valid: false, message: 'Date and time cannot be in the past. Please select current or future date/time.' };
+    }
+    
     return { valid: true };
+  };
+
+  // Helper to get minimum date for datetime-local input (current date and time)
+  const getMinDateTime = () => {
+    const now = new Date();
+    // Format as YYYY-MM-DDTHH:mm for datetime-local input
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
   const validateTrackingNumber = (trackingNumber) => {
@@ -202,9 +223,11 @@ const OrderManagement = () => {
         return;
       }
 
+    // Final validation before submission - ensure no past dates slip through
     const validation = validateDeliveryDate(deliveryTime);
     if (!validation.valid) {
       toast.error(validation.message);
+      setDeliveryTime('');
       return;
     }
 
@@ -373,6 +396,7 @@ const OrderManagement = () => {
       const dateValidation = validateDeliveryDate(dispatchData.estimatedDelivery);
       if (!dateValidation.valid) {
         toast.error(dateValidation.message);
+        setDispatchData({...dispatchData, estimatedDelivery: ''});
         return;
       }
     }
@@ -944,7 +968,54 @@ const OrderManagement = () => {
                   id="delivery-time-input"
                     type="datetime-local"
                     value={deliveryTime}
-                    onChange={(e) => setDeliveryTime(e.target.value)}
+                    onChange={(e) => {
+                      const enteredValue = e.target.value;
+                      if (enteredValue) {
+                        const validation = validateDeliveryDate(enteredValue);
+                        if (!validation.valid) {
+                          toast.error(validation.message);
+                          // Reset to empty or keep previous valid value
+                          setDeliveryTime('');
+                          e.target.value = '';
+                          return;
+                        }
+                      }
+                      setDeliveryTime(enteredValue);
+                    }}
+                    onBlur={(e) => {
+                      // Validate on blur as well to catch manual entries
+                      if (e.target.value) {
+                        const validation = validateDeliveryDate(e.target.value);
+                        if (!validation.valid) {
+                          toast.error(validation.message);
+                          setDeliveryTime('');
+                          e.target.value = '';
+                        }
+                      }
+                    }}
+                    onPaste={(e) => {
+                      // Prevent paste and validate after paste
+                      e.preventDefault();
+                      const pastedValue = e.clipboardData.getData('text');
+                      if (pastedValue) {
+                        const validation = validateDeliveryDate(pastedValue);
+                        if (!validation.valid) {
+                          toast.error(validation.message);
+                          return;
+                        }
+                        setDeliveryTime(pastedValue);
+                        e.target.value = pastedValue;
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      // Allow navigation and deletion keys
+                      const allowedKeys = ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+                      if (allowedKeys.includes(e.key)) {
+                        return;
+                      }
+                      // For manual typing, we'll validate on change
+                    }}
+                    min={getMinDateTime()}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   disabled={submitting}
@@ -1048,7 +1119,54 @@ const OrderManagement = () => {
                     id="dispatch-delivery-input"
                       type="datetime-local"
                       value={dispatchData.estimatedDelivery}
-                      onChange={(e) => setDispatchData({...dispatchData, estimatedDelivery: e.target.value})}
+                      onChange={(e) => {
+                        const enteredValue = e.target.value;
+                        if (enteredValue) {
+                          const validation = validateDeliveryDate(enteredValue);
+                          if (!validation.valid) {
+                            toast.error(validation.message);
+                            // Reset to empty or keep previous valid value
+                            setDispatchData({...dispatchData, estimatedDelivery: ''});
+                            e.target.value = '';
+                            return;
+                          }
+                        }
+                        setDispatchData({...dispatchData, estimatedDelivery: enteredValue});
+                      }}
+                      onBlur={(e) => {
+                        // Validate on blur as well to catch manual entries
+                        if (e.target.value) {
+                          const validation = validateDeliveryDate(e.target.value);
+                          if (!validation.valid) {
+                            toast.error(validation.message);
+                            setDispatchData({...dispatchData, estimatedDelivery: ''});
+                            e.target.value = '';
+                          }
+                        }
+                      }}
+                      onPaste={(e) => {
+                        // Prevent paste and validate after paste
+                        e.preventDefault();
+                        const pastedValue = e.clipboardData.getData('text');
+                        if (pastedValue) {
+                          const validation = validateDeliveryDate(pastedValue);
+                          if (!validation.valid) {
+                            toast.error(validation.message);
+                            return;
+                          }
+                          setDispatchData({...dispatchData, estimatedDelivery: pastedValue});
+                          e.target.value = pastedValue;
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        // Allow navigation and deletion keys
+                        const allowedKeys = ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+                        if (allowedKeys.includes(e.key)) {
+                          return;
+                        }
+                        // For manual typing, we'll validate on change
+                      }}
+                      min={getMinDateTime()}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={submitting}
                     />

@@ -51,20 +51,25 @@ api.interceptors.request.use(
     config.metadata = { startTime: Date.now() };
     
     // Only cancel previous request for GET requests with same URL
-    // Add timestamp check to prevent cancelling legitimate rapid requests
+    // Only cancel if previous request is very recent (< 50ms) to prevent duplicate requests
+    // But don't cancel if the previous request might have already completed
     if (config.method === 'get') {
       const requestKey = `${config.method}:${config.url}`;
       const existingCancelToken = cancelTokenMap.get(requestKey);
       
-      // Only cancel if there's an existing pending request AND it's very recent (< 100ms)
-      // Increased threshold to prevent cancelling legitimate rapid requests
+      // Only cancel if there's an existing pending request AND it's very recent (< 50ms)
+      // This prevents duplicate rapid requests but allows legitimate sequential requests
       if (existingCancelToken && existingCancelToken.timestamp) {
         const timeSinceLastRequest = Date.now() - existingCancelToken.timestamp;
-        if (timeSinceLastRequest < 100) {
+        // Only cancel if request is extremely recent (likely a duplicate)
+        if (timeSinceLastRequest < 50) {
           try {
-            existingCancelToken.cancel('Request cancelled due to new request');
+            // Check if the cancel token is still valid before cancelling
+            if (existingCancelToken && typeof existingCancelToken.cancel === 'function') {
+              existingCancelToken.cancel('Request cancelled due to duplicate request');
+            }
           } catch (e) {
-            // Request already completed, ignore
+            // Request already completed or cancelled, ignore
           }
         }
       }

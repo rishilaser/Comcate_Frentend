@@ -11,24 +11,36 @@ const OrderTracking = () => {
   const { orderData: realTimeOrderData, lastUpdate } = useOrderUpdates(id);
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
 
   useEffect(() => {
-    if (user?._id) {
+    if (user?._id && !isFetching) {
       fetchOrder();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user?._id]);
 
   // Auto-refresh when page becomes visible (user switches back to tab/window)
   useEffect(() => {
+    let timeoutId;
+    
     const handleVisibilityChange = () => {
-      if (!document.hidden && id && user?._id) {
-        fetchOrder();
+      if (!document.hidden && id && user?._id && !isFetching) {
+        // Debounce to prevent rapid calls
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          fetchOrder();
+        }, 200);
       }
     };
 
     const handleFocus = () => {
-      if (id && user?._id) {
-        fetchOrder();
+      if (id && user?._id && !isFetching) {
+        // Debounce to prevent rapid calls
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          fetchOrder();
+        }, 200);
       }
     };
 
@@ -36,25 +48,56 @@ const OrderTracking = () => {
     window.addEventListener('focus', handleFocus);
 
     return () => {
+      clearTimeout(timeoutId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, user?._id]);
+  }, [id, user?._id, isFetching]);
 
   // Update order with real-time data
   useEffect(() => {
     if (realTimeOrderData && order) {
-      setOrder(prevOrder => ({
-        ...prevOrder,
-        ...realTimeOrderData,
-        tracking: generateTimeline({ ...prevOrder, ...realTimeOrderData })
-      }));
+      setOrder(prevOrder => {
+        // Properly merge nested objects to ensure all fields are preserved
+        const mergedOrder = {
+          ...prevOrder,
+          ...realTimeOrderData,
+          // Ensure nested objects are properly merged (not overwritten)
+          payment: realTimeOrderData.payment 
+            ? { ...prevOrder.payment, ...realTimeOrderData.payment }
+            : prevOrder.payment,
+          dispatch: realTimeOrderData.dispatch 
+            ? { ...prevOrder.dispatch, ...realTimeOrderData.dispatch }
+            : prevOrder.dispatch,
+          production: realTimeOrderData.production 
+            ? { ...prevOrder.production, ...realTimeOrderData.production }
+            : prevOrder.production,
+          quotation: realTimeOrderData.quotation 
+            ? { ...prevOrder.quotation, ...realTimeOrderData.quotation }
+            : prevOrder.quotation,
+          inquiry: realTimeOrderData.inquiry 
+            ? { ...prevOrder.inquiry, ...realTimeOrderData.inquiry }
+            : prevOrder.inquiry
+        };
+        
+        // Regenerate timeline with merged data
+        return {
+          ...mergedOrder,
+          tracking: generateTimeline(mergedOrder)
+        };
+      });
     }
   }, [realTimeOrderData, order]);
 
   const fetchOrder = async () => {
+    // Prevent multiple simultaneous calls
+    if (isFetching) {
+      return;
+    }
+    
     try {
+      setIsFetching(true);
       setLoading(true);
       console.log('Fetching order tracking for ID:', id);
       
@@ -79,10 +122,17 @@ const OrderTracking = () => {
         toast.error('Order not found');
       }
     } catch (error) {
+      // Handle cancellation errors silently - they're expected when requests are cancelled
+      if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED' || error.message?.includes('cancelled')) {
+        console.log('Request was cancelled, ignoring error');
+        return; // Don't show error for cancelled requests
+      }
+      
       console.error('Error fetching order:', error);
       toast.error('Failed to fetch order details');
     } finally {
       setLoading(false);
+      setIsFetching(false);
     }
   };
 
@@ -93,13 +143,15 @@ const OrderTracking = () => {
     
     // Helper function to get real timestamp or fallback
     const getRealTimestamp = (timestamp, fallbackDate) => {
-      if (timestamp) {
+      // Validate timestamp - check if it exists and is a valid date
+      if (timestamp && !isNaN(new Date(timestamp).getTime())) {
         const date = new Date(timestamp);
         return {
           date: date.toISOString().split('T')[0],
           time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
         };
       }
+      // Return fallback date if timestamp is invalid or missing
       return {
         date: fallbackDate.toISOString().split('T')[0],
         time: fallbackDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
@@ -145,8 +197,11 @@ const OrderTracking = () => {
         location: 'Payment Gateway',
         step: 4,
         icon: 'payment',
-        completed: ['in_production', 'ready_for_dispatch', 'dispatched', 'delivered'].includes(status),
-        isCurrent: status === 'in_production'
+        // Payment is completed if payment status is 'completed' OR paidAt exists OR order status is beyond confirmed
+        completed: orderData.payment?.status === 'completed' || 
+                   orderData.payment?.paidAt || 
+                   ['in_production', 'ready_for_dispatch', 'dispatched', 'delivered'].includes(status),
+        isCurrent: status === 'confirmed' && (!orderData.payment?.status || orderData.payment?.status !== 'completed')
       },
       {
         ...getRealTimestamp(orderData.dispatch?.dispatchedAt, new Date(createdAt.getTime() + 4 * 24 * 60 * 60 * 1000)),
