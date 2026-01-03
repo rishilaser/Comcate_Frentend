@@ -276,13 +276,13 @@ function Home() {
           <div className="row align-items-center">
             <div className="col-lg-6 col-md-6">
               <div className="d-flex align-items-center gap-4 flex-wrap">
-                <a href="mailto:jobshop@247cutbend.in" className="text-white text-decoration-none d-flex align-items-center gap-2" style={{ fontSize: '14px' }}>
+                <a href="mailto:sales@247cutbend.in" className="text-white text-decoration-none d-flex align-items-center gap-2" style={{ fontSize: '14px' }}>
                   <i className="far fa-envelope" style={{ fontSize: '16px' }}></i>
-                  <span>jobshop@247cutbend.in</span>
+                  <span>sales@247cutbend.in</span>
                 </a>
                 <a href="tel:+919512041116" className="text-white text-decoration-none d-flex align-items-center gap-2" style={{ fontSize: '14px' }}>
                   <i className="far fa-phone" style={{ fontSize: '16px' }}></i>
-                  <span>+91 95120 41116</span>
+                  <span>+91 9004073379</span>
                 </a>
               </div>
             </div>
@@ -401,7 +401,7 @@ function Home() {
               onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
               onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
                 {/* <img src="https://www.247cutbend.in/assets/img/logo%20(2).png" alt="logo" /> */}
-                <img src="/logoo.png" alt="247CutBend Logo" style={{
+                <img src="/Logo.png" alt="247CutBend logo" style={{
                   height: isScrolled ? '55px' : '65px',
                   width: 'auto',
                   objectFit: 'contain',
@@ -416,7 +416,7 @@ function Home() {
                 <div className="offcanvas-header" style={{padding: '20px', borderBottom: '1px solid rgba(0,0,0,0.1)'}}>
                   <div className="offcanvas-brand" id="offcanvasNavbarLabel" style={{display: 'flex', alignItems: 'center'}}>
                     {/* <img src="https://www.247cutbend.in/assets/img/logo%20(2).png" alt="" /> */}
-                    <img src="/assets/img/Cutbend_Footer_LOGO.png" alt="247CutBend Logo" style={{
+                    <img src="/Logo.png" alt="247CutBend Logo" style={{
                       height: '60px',
                       width: 'auto',
                       objectFit: 'contain',
@@ -573,7 +573,7 @@ function Home() {
       <div className="sidebar-popup offcanvas offcanvas-end" tabIndex="-1" id="sidebarPopup">
         <div className="offcanvas-header">
           <div className="sidebar-popup-logo">
-            <img src="https://www.247cutbend.in/assets/img/logo%20(2).png" alt="" />
+            <img src="/Logo.png" alt="" />
           </div>
           <button type="button" className="btn-close" data-bs-dismiss="offcanvas" aria-label="Close">
             <i className="far fa-xmark"></i>
@@ -2926,7 +2926,7 @@ function Home() {
                 <div className="col-lg-5">
                   <div className="footer-widget-box about-us">
                     <div className="footer-logo" style={{display: 'inline-block', marginBottom: '20px'}}>
-                      <img src="/assets/img/Cutbend_Footer_LOGO.png" alt="247CutBend Logo" style={{height: '50px', width: 'auto'}} />
+                      <img src="/Logo.png" alt="247CutBend Logo" style={{height: '50px', width: 'auto'}} />
                     </div>
                     <p style={{
                       color: 'rgba(255,255,255,0.8)',
@@ -3222,7 +3222,7 @@ function Home() {
                           }}
                           onMouseEnter={(e) => e.currentTarget.style.color = '#FFC107'}
                           onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'}>
-                            +91 95120 41116
+                            +91 9004073379
                           </a>
                         </div>
                       </li>
@@ -3248,7 +3248,7 @@ function Home() {
                             marginBottom: '5px',
                             margin: 0
                           }}>Mail Us</h6>
-                          <a href="mailto:jobshop@247cutbend.in" style={{
+                          <a href="mailto:sales@247cutbend.in" style={{
                             color: 'rgba(255,255,255,0.8)',
                             textDecoration: 'none',
                             fontSize: '0.9rem',
@@ -3256,7 +3256,7 @@ function Home() {
                           }}
                           onMouseEnter={(e) => e.currentTarget.style.color = '#FFC107'}
                           onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'}>
-                            jobshop@247cutbend.in
+                            sales@247cutbend.in
                           </a>
                         </div>
                       </li>

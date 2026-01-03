@@ -60,9 +60,9 @@ const AdminLayout = ({ children }) => {
         {/* Main Content Area - Optimized */}
         <main className={`flex-1 w-full transition-all duration-200 ${
           sidebarOpen ? 'lg:ml-64' : 'lg:ml-20'
-        }`}>
-          <div className="w-full min-h-[calc(100vh-5rem)] py-6 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-7xl mx-auto">
+        }`} style={{ minWidth: 0 }}>
+          <div className="w-full min-h-[calc(100vh-5rem)] py-6 px-4 sm:px-6 lg:px-8" style={{ minWidth: 0, overflowX: 'auto' }}>
+            <div className="max-w-7xl mx-auto" style={{ minWidth: 0 }}>
               {children}
             </div>
           </div>

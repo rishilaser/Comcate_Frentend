@@ -90,14 +90,14 @@ const AdminSidebar = ({ onLinkClick, onToggle, isCollapsed = false, onLogoClick 
       >
         <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
           <img 
-            src="/logobg.png" 
+            src="/Logo.png" 
             alt="247CutBend Logo" 
             className="flex-shrink-0"
             style={{ 
               width: '64px', 
               height: '64px', 
               objectFit: 'contain'
-            }} 
+            }}
           />
           {!isCollapsed && (
             <div className="overflow-hidden">

@@ -39,7 +39,7 @@ const Header = () => {
             <div className="flex-shrink-0">
               <div className="flex items-center">
               <img 
-                src="https://www.247cutbend.in/assets/img/logo%20(2).png" 
+                src="/Logo.png" 
                 alt="247CUTBEND Logo" 
                 className="h-20 w-auto mr-3"
               />

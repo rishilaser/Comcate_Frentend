@@ -24,7 +24,7 @@ const Footer = () => {
             <div className="lg:col-span-2">
               <div className="mb-8">
                 <img 
-                  src="/assets/img/Cutbend_Footer_LOGO.png" 
+                  src="/Logo.png" 
                   alt="247CutBend Logo" 
                   style={{ height: '50px', width: 'auto', marginBottom: '24px' }}
                 />
@@ -316,7 +316,7 @@ const Footer = () => {
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.color = '#FFC107'}
                     onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.85)'}>
-                      +91 95120 41116
+                      +91 9004073379
                     </a>
                   </div>
                 </div>
@@ -344,7 +344,7 @@ const Footer = () => {
                       fontWeight: '600',
                       marginBottom: '6px'
                     }}>Mail Us:</p>
-                    <a href="mailto:jobshop@247cutbend.in" style={{
+                    <a href="mailto:sales@247cutbend.in" style={{
                       color: 'rgba(255,255,255,0.85)',
                       fontSize: '0.85rem',
                       textDecoration: 'none',
@@ -352,7 +352,7 @@ const Footer = () => {
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.color = '#FFC107'}
                     onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.85)'}>
-                      jobshop@247cutbend.in
+                      sales@247cutbend.in
                     </a>
                   </div>
                 </div>

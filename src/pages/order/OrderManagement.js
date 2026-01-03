@@ -541,7 +541,7 @@ const OrderManagement = () => {
 
   return (
     <>
-      <div className="w-full">
+      <div className="w-full" style={{ minWidth: 0 }}>
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Order Management</h1>
@@ -549,8 +549,8 @@ const OrderManagement = () => {
         </div>
 
         {/* Filter Buttons */}
-        <div className="mt-6">
-          <div className="flex flex-wrap gap-3">
+        <div className="mt-6" style={{ minWidth: 0, width: '100%' }}>
+          <div className="flex flex-wrap gap-3" style={{ minWidth: 0 }}>
             <button
               onClick={() => setFilter('all')}
               className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 flex items-center space-x-2 ${
@@ -667,11 +667,16 @@ const OrderManagement = () => {
         </div>
 
         {/* Orders Table */}
-        <div className="mt-6">
-          <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
-            <div className="order-table-horizontal-scroll overflow-x-auto">
-              <div className="max-h-[500px] overflow-y-auto">
-                <table className="min-w-full divide-y divide-gray-200" role="table" aria-label="Orders table">
+        <div className="mt-6" style={{ minWidth: 0, width: '100%' }}>
+          <div className="bg-white shadow-sm border border-gray-200 rounded-lg" style={{ minWidth: 0, width: '100%' }}>
+            <div className="order-table-horizontal-scroll overflow-x-auto w-full" style={{ 
+              WebkitOverflowScrolling: 'touch'
+            }}>
+              <div className="max-h-[500px] overflow-y-auto" style={{
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#d1d5db #f3f4f6'
+              }}>
+                <table className="min-w-full divide-y divide-gray-200" role="table" aria-label="Orders table" style={{ minWidth: '1200px', width: '100%' }}>
                     <thead className="bg-gray-100 sticky top-0 z-10">
                       <tr>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
